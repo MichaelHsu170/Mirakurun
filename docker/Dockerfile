@@ -16,7 +16,12 @@ RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
+        cmake \
+        build-essential \
+        autoconf \
+        automake \
         make \
+        git \
         gcc \
         g++ \
         pkg-config \
