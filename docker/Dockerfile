@@ -16,7 +16,12 @@ RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
+        cmake \
+        build-essential \
+        autoconf \
+        automake \
         make \
+        git \
         gcc \
         g++ \
         pkg-config \
@@ -28,7 +33,10 @@ RUN apt-get update && \
         dvb-tools \
         && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    git config --global http.sslVerify false && \
+    cd && git clone https://github.com/stz2012/libarib25.git && cd libarib25 && mkdir release && cd release && cmake .. && make && make install && cd ../.. && \
+    git clone https://github.com/stz2012/recpt1.git && cd recpt1/recpt1 && ./autogen.sh && ./configure --enable-b25 && make && make install && cd && rm -rf libarib25 recpt1
 COPY --from=build /usr/local/lib/node_modules/mirakurun /app
 CMD ["./docker/container-init.sh"]
 EXPOSE 40772 9229
