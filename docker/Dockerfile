@@ -25,6 +25,7 @@ RUN apt-get update && \
         gcc \
         g++ \
         pkg-config \
+        wget \
         pcscd \
         libpcsclite-dev \
         libccid \
@@ -36,7 +37,9 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* && \
     git config --global http.sslVerify false && \
     cd && git clone https://github.com/stz2012/libarib25.git && cd libarib25 && mkdir release && cd release && cmake .. && make && make install && cd ../.. && \
-    git clone https://github.com/stz2012/recpt1.git && cd recpt1/recpt1 && ./autogen.sh && ./configure --enable-b25 && make && make install && cd && rm -rf libarib25 recpt1
+    git clone https://github.com/stz2012/recpt1.git && cd recpt1/recpt1 && ./autogen.sh && ./configure --enable-b25 && make && make install && cd && \
+    wget http://www13.plala.or.jp/sat/recdvb/recdvb-1.3.3.tgz && tar xvzf recdvb-1.3.3.tgz && cd recdvb-1.3.3 && ./autogen.sh && ./configure --enable-b25 && make && make install && cd && \
+    rm -rf libarib25 recpt1 recdvb-1.3.3 recdvb-1.3.3.tgz
 COPY --from=build /usr/local/lib/node_modules/mirakurun /app
 CMD ["./docker/container-init.sh"]
 EXPOSE 40772 9229
