@@ -25,6 +25,7 @@ RUN apt-get update && \
         gcc \
         g++ \
         pkg-config \
+        wget \
         pcscd \
         libpcsclite-dev \
         libccid \
