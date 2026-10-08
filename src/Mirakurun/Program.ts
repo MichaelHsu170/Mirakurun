@@ -30,6 +30,8 @@ export class Program {
     private _itemMap = new Map<number, db.Program>();
     private _itemMapDeleted = new Map<number, db.Program>();
     private _saveTimerId: NodeJS.Timeout;
+    /** time by which pending changes are saved even if more keep arriving (0: nothing pending) */
+    private _saveDeadline = 0;
     private _emitTimerId: NodeJS.Timeout;
     private _emitRunning = false;
     private _emitPrograms = new Map<db.Program, apid.EventType>();
@@ -188,7 +190,12 @@ export class Program {
         clearTimeout(this._emitTimerId);
         this._emitTimerId = setTimeout(() => this._emit(), 1000);
         clearTimeout(this._saveTimerId);
-        this._saveTimerId = setTimeout(() => this._save(), 1000 * 30);
+        // debounce by 30 s, but at most 5 min after the first unsaved change: with continuous EIT
+        // updates a plain debounce would never save
+        if (this._saveDeadline === 0) {
+            this._saveDeadline = Date.now() + 1000 * 60 * 5;
+        }
+        this._saveTimerId = setTimeout(() => this._save(), Math.max(0, Math.min(1000 * 30, this._saveDeadline - Date.now())));
     }
 
     async load(): Promise<void> {
@@ -264,6 +271,7 @@ export class Program {
     }
 
     private _save(): void {
+        this._saveDeadline = 0;
         log.debug("saving programs...");
 
         // TODO: Do we need to save/load logically deleted items?
