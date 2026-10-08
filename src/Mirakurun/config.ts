@@ -17,12 +17,13 @@ import { execSync } from "child_process";
 import { dirname } from "path";
 import { hostname } from "os";
 import { existsSync, readdirSync } from "fs";
-import { mkdir, copyFile, readFile, writeFile } from "fs/promises";
+import { mkdir, copyFile, readFile } from "fs/promises";
 import * as yaml from "js-yaml";
 import * as ipnum from "ip-num";
 import Queue from "promise-queue";
 import * as apid from "../../api";
 import * as log from "./log";
+import { writeFileAtomic } from "./fileUtil";
 import { isValidCronExpression } from "./Job";
 
 type Writable<T> = { -readonly [K in keyof T]: T[K] };
@@ -400,7 +401,7 @@ async function save(name: "server" | "tuners" | "channels", path: string, data: 
     log.info("save %s config `%s`", name, path);
 
     await configIOQueue.add(async () => {
-        await writeFile(path, yaml.dump(data));
+        await writeFileAtomic(path, yaml.dump(data));
     });
 }
 

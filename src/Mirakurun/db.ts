@@ -15,7 +15,7 @@
 */
 import { dirname } from "path";
 import { existsSync, readFileSync } from "fs";
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { mkdir, readFile } from "fs/promises";
 import { promisify } from "util";
 import * as yieldableJSON from "yieldable-json";
 const parseAsync = promisify(yieldableJSON.parseAsync);
@@ -23,6 +23,7 @@ const stringifyAsync = promisify(yieldableJSON.stringifyAsync);
 import Queue from "promise-queue";
 import * as apid from "../../api";
 import * as log from "./log";
+import { writeFileAtomic } from "./fileUtil";
 
 interface Service extends apid.Service {
     /** @deprecated */
@@ -83,31 +84,24 @@ async function load(path: string, integrity: string, sync = false): Promise<any[
     });
 }
 
-async function save(path: string, data: any[], integrity: string, retrying = false): Promise<void> {
+async function save(path: string, data: any[], integrity: string): Promise<void> {
     log.info("save db `%s` w/ integrity (%s)", path, integrity);
 
-    if (retrying === false) {
-        data.unshift({ __integrity__: integrity });
-    }
+    data.unshift({ __integrity__: integrity });
 
     return dbIOQueue.add(async () => {
+        const json = await stringifyAsync(data);
         try {
-            await writeFile(path, await stringifyAsync(data));
+            await writeFileAtomic(path, json);
         } catch (e) {
-            if (retrying === false) {
-                // mkdir if not exists
-                const dirPath = dirname(path);
-                if (existsSync(dirPath) === false) {
-                    try {
-                        await mkdir(dirPath, { recursive: true });
-                    } catch (e) {
-                        throw e;
-                    }
-                }
-                // retry
-                await save(path, data, integrity, true);
+            // mkdir if not exists, then retry in this task: queuing the retry would deadlock,
+            // because dbIOQueue runs one task at a time and this task is still running
+            const dirPath = dirname(path);
+            if (existsSync(dirPath) === true) {
+                throw e;
             }
-            throw e;
+            await mkdir(dirPath, { recursive: true });
+            await writeFileAtomic(path, json);
         }
     });
 }
