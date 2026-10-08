@@ -1651,3 +1651,31 @@ describe("[scan.spec] /api/config/channel/scan : generateChannelItems", () => {
         assert.strictEqual("serviceId" in channelItems[0], false);
     });
 });
+
+describe("[scan.spec] PUT /api/config/channels/scan with an oversized range", () => {
+    const fakeRes = () => ({
+        body: null,
+        setHeader() {},
+        status() { return this; },
+        writeHead() { return this; },
+        end(body) { this.body = body; }
+    });
+
+    it("bounds the channel numbers in the request schema", () => {
+        for (const name of ["minCh", "maxCh", "minSubCh", "maxSubCh"]) {
+            const param = scan.put.apiDoc.parameters.find(p => p.name === name);
+            assert.strictEqual(param.maximum, 999, name);
+        }
+    });
+
+    it("does not leave the scan marked as running when building the scan config fails", async () => {
+        await assert.rejects(scan.put({ query: { type: "GR", minCh: "0", maxCh: "5000000000" } }, fakeRes()));
+
+        const res = fakeRes();
+        await scan.get({ query: {} }, res);
+        while (res.body === null) { // responseJSON serializes asynchronously
+            await new Promise(resolve => setImmediate(resolve));
+        }
+        assert.strictEqual(JSON.parse(res.body).isScanning, false);
+    });
+});

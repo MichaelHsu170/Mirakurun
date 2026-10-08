@@ -830,7 +830,14 @@ export const put: Operation = async (req, res) => {
     };
 
     // Generate scan configuration
-    const scanConfig = generateScanConfig(channelOptions);
+    // (reset the flag if this throws, otherwise every later scan is refused with 409 until restart)
+    let scanConfig: ReturnType<typeof generateScanConfig>;
+    try {
+        scanConfig = generateScanConfig(channelOptions);
+    } catch (e) {
+        scanStatus.isScanning = false;
+        throw e;
+    }
 
     // Handle missing scan configuration
     if (!scanConfig) {
@@ -934,12 +941,16 @@ About BS Subchannel Style:
             in: "query",
             name: "minCh",
             type: "integer",
+            minimum: 0,
+            maximum: 999, // range() allocates every number in between
             description: "Specifies the minimum number of channel numbers to scan."
         },
         {
             in: "query",
             name: "maxCh",
             type: "integer",
+            minimum: 0,
+            maximum: 999, // range() allocates every number in between
             description: "Specifies the maximum number of channel numbers to scan."
         },
         {
@@ -957,12 +968,16 @@ About BS Subchannel Style:
             in: "query",
             name: "minSubCh",
             type: "integer",
+            minimum: 0,
+            maximum: 999, // range() allocates every number in between
             description: "Specifies the minimum number of subchannel numbers to scan. This parameter is only used if the type is `BS` and the useSubCh is `true`."
         },
         {
             in: "query",
             name: "maxSubCh",
             type: "integer",
+            minimum: 0,
+            maximum: 999, // range() allocates every number in between
             description: "Specifies the maximum number of subchannel numbers to scan. This parameter is only used if the type is `BS` and the useSubCh is `true`."
         },
         {
