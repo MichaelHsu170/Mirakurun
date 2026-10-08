@@ -255,6 +255,11 @@ class State extends EventEmitter<StateEventTypes> {
             await this.fetchJobs();
             await this.fetchJobSchedules();
 
+            // a disconnect + reconnect during the awaits above can run this twice; clear the timers of
+            // an earlier run so they do not pile up
+            clearInterval(_statusRefreshInterval);
+            clearInterval(_servicesRefreshInterval);
+
             // periodic refresh (every 5s)
             _statusRefreshInterval = setInterval(async () => {
                 if (document.hidden) { return; }
