@@ -306,6 +306,17 @@ export default class TunerDevice extends EventEmitter {
 
         this._process.once("exit", () => this._exited = true);
 
+        // a failed spawn emits both "error" and "close"; releasing twice would respawn twice and
+        // leave the first respawned process running without listeners, still holding the tuner
+        let isReleaseScheduled = false;
+        const scheduleRelease = () => {
+            if (isReleaseScheduled) {
+                return;
+            }
+            isReleaseScheduled = true;
+            setTimeout(this._release.bind(this), this._config.dvbDevicePath ? 1000 : 100);
+        };
+
         this._process.once("error", (err) => {
             log.fatal("TunerDevice#%d process error `%s` (pid=%d)", this._index, err.name, this._process.pid);
 
@@ -317,7 +328,7 @@ export default class TunerDevice extends EventEmitter {
                 this._closing = true;
             }
             this._end();
-            setTimeout(this._release.bind(this), this._config.dvbDevicePath ? 1000 : 100);
+            scheduleRelease();
         });
 
         this._process.once("close", (code, signal) => {
@@ -327,7 +338,7 @@ export default class TunerDevice extends EventEmitter {
             );
 
             this._end();
-            setTimeout(this._release.bind(this), this._config.dvbDevicePath ? 1000 : 100);
+            scheduleRelease();
         });
 
         this._process.stderr.on("data", data => {
