@@ -87,7 +87,13 @@ export function isPermittedIPAddress(addr: string): boolean {
 }
 
 export function isPermittedHost(url: string, allowedHostname?: string): boolean {
-    const u = new URL(url);
+    // Origin/Referer come from the client: "null" or a malformed value is simply not permitted
+    let u: URL;
+    try {
+        u = new URL(url);
+    } catch (e) {
+        return false;
+    }
 
     if (u.hostname === "localhost" || u.hostname === allowedHostname || isPermittedIPAddress(u.hostname) === true) {
         return true;
@@ -96,9 +102,20 @@ export function isPermittedHost(url: string, allowedHostname?: string): boolean 
     return false;
 }
 
-export async function getLatestVersion(): Promise<string> {
-    const { stdout } = await asyncExec("npm view mirakurun version", { encoding: "utf8" });
-    const latestVersion = stdout.trim();
+// `npm view` spawns npm and needs the network, so the result is shared and cached
+const LATEST_VERSION_TTL = 1000 * 60 * 60;
+let latestVersionCache: { promise: Promise<string>; expiresAt: number } | null = null;
 
-    return latestVersion;
+export async function getLatestVersion(): Promise<string> {
+    if (latestVersionCache === null || latestVersionCache.expiresAt < Date.now()) {
+        const promise = (async () => {
+            const { stdout } = await asyncExec("npm view mirakurun version", { encoding: "utf8" });
+            return stdout.trim();
+        })();
+        latestVersionCache = { promise, expiresAt: Date.now() + LATEST_VERSION_TTL };
+        // do not cache a failure
+        promise.catch(() => latestVersionCache = null);
+    }
+
+    return latestVersionCache.promise;
 }

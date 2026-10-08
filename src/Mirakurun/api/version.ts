@@ -20,9 +20,18 @@ import { getLatestVersion } from "../system";
 const pkg = require("../../../package.json");
 
 export const get: Operation = async (req, res) => {
+    let latest: string;
+    try {
+        latest = await getLatestVersion();
+    } catch (e) {
+        // Express 4 does not handle a rejected handler, which would leave the request hanging
+        api.responseError(res, 500, (e as Error).message);
+        return;
+    }
+
     const version: apid.Version = {
         current: pkg.version,
-        latest: await getLatestVersion()
+        latest
     };
 
     api.responseJSON(res, version);
