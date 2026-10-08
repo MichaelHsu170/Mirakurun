@@ -43,7 +43,7 @@
     "watch": "concurrently -n w: npm:watch:*",
     "watch:server": "tsc -w --declaration",
     "watch:webpack": "webpack -w",
-    "test": "node --test --test-reporter=spec -r source-map-support/register",
+    "test": "node --test --test-force-exit --test-reporter=spec -r source-map-support/register",
     "test:watch": "node --test --watch --test-reporter=tap -r source-map-support/register",
     "clean": "rimraf lib/*",
     "prepublishOnly": "npm run clean && npm run build",
