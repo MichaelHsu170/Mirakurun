@@ -54,6 +54,7 @@ const PROVIDE_PIDS = [
 ];
 
 const DSMCC_BLOCK_SIZE = 4066; // ARIB TR-B15
+const DSMCC_MAX_MODULE_SIZE = 16 * 1024 * 1024; // module size comes from the broadcast; logo data is far smaller
 
 const LOGO_DATA_NAME_BS = Buffer.from("LOGO-05"); // ARIB STD-B21, ARIB TR-B15
 const LOGO_DATA_NAME_CS = Buffer.from("CS_LOGO-05"); // ARIB STD-B21, ARIB TR-B15
@@ -82,6 +83,8 @@ interface DownloadData {
     moduleVersion: number;
     moduleSize: number;
     loadedBytes: number;
+    /** block numbers already copied: the carousel repeats blocks, which must not be counted twice */
+    loadedBlocks: Set<number>;
     data?: Buffer;
 }
 
@@ -725,6 +728,11 @@ export default class TSFilter extends EventEmitter {
             const blockNumber: number = ddb.blockNumber;
             const blockDataByte: Buffer = ddb.blockDataByte;
 
+            if (dl.loadedBlocks.has(blockNumber) || DSMCC_BLOCK_SIZE * blockNumber + blockDataByte.length > dl.moduleSize) {
+                return;
+            }
+            dl.loadedBlocks.add(blockNumber);
+
             blockDataByte.copy(dl.data, DSMCC_BLOCK_SIZE * blockNumber);
             dl.loadedBytes += blockDataByte.length;
 
@@ -775,6 +783,9 @@ export default class TSFilter extends EventEmitter {
                     ) {
                         continue;
                     }
+                    if (module.moduleSize > DSMCC_MAX_MODULE_SIZE) {
+                        continue;
+                    }
                     this._dlDataMap.set(dii.downloadId, {
                         downloadId: dii.downloadId,
                         // blockSize: dii.blockSize, // 4066
@@ -782,6 +793,7 @@ export default class TSFilter extends EventEmitter {
                         moduleVersion: module.moduleVersion,
                         moduleSize: module.moduleSize,
                         loadedBytes: 0,
+                        loadedBlocks: new Set(),
                         data: Buffer.allocUnsafeSlow(module.moduleSize).fill(0)
                     });
 
