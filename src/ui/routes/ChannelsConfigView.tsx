@@ -275,14 +275,19 @@ export const ChannelsConfigView: React.FC = () => {
         setShowSaveDialog(false);
         try {
             console.log("ChannelsConfigView", "PUT", configAPI, "<-", editing);
-            await fetch(configAPI, {
+            const res = await fetch(configAPI, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json; charset=utf-8" },
                 body: JSON.stringify(editing)
             });
+            // setSaved reloads the config from the server, which would discard the edits of a failed save
+            if (!res.ok) {
+                throw new Error(`${res.status} ${await res.text()}`);
+            }
             setSaved(true);
         } catch (err) {
             console.error(err);
+            window.alert(`保存に失敗しました: ${err}`);
         }
     };
 
