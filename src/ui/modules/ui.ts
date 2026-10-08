@@ -58,10 +58,26 @@ export function setFavicon(src: string) {
     }
 }
 
-export function autoLink(text: string): string {
+function escapeHTML(text: string): string {
     return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+/** Returns HTML for broadcast text with links. The text is escaped first: it is set with dangerouslySetInnerHTML. */
+export function autoLink(text: string): string {
+    return escapeHTML(text)
         .replace(regexp.epgHTTPLinkFormat, text => {
-            let url = text.normalize("NFKC");
+            // NFKC turns full-width ＂＇＜＞ into ASCII after the text was escaped, so escape them again
+            // (but not &: the text is already escaped, & here starts an entity)
+            let url = text.normalize("NFKC")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
             if (!/^http/.test(url)) {
                 url = `https://${url}`;
             }
