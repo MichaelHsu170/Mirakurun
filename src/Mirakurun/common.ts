@@ -104,9 +104,18 @@ function updateArray<T extends any[], U extends any[]>(target: T, input: U): boo
     return updated;
 }
 
-export function sleep(ms: number): Promise<void> {
+/** Resolves after `ms`, or as soon as `signal` is aborted. */
+export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     return new Promise(resolve => {
-        setTimeout(resolve, ms);
+        const onAbort = () => {
+            clearTimeout(timer);
+            resolve();
+        };
+        const timer = setTimeout(() => {
+            signal?.removeEventListener("abort", onAbort);
+            resolve();
+        }, ms);
+        signal?.addEventListener("abort", onAbort, { once: true });
     });
 }
 

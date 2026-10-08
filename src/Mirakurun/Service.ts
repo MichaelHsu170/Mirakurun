@@ -278,9 +278,12 @@ export class Service {
                     this._queueScanToAdd(channel);
                 }
             },
-            readyFn: async () => {
+            readyFn: async (signal?: AbortSignal) => {
                 // wait for all Service.Check-Add.* jobs to finish
                 while (true) {
+                    if (signal?.aborted) {
+                        return false;
+                    }
                     if (_.job.jobs.some(job => job.status !== "finished" && job.key.includes("Service.Add.Check."))) {
                         await sleep(1000);
                         continue;
@@ -330,7 +333,7 @@ export class Service {
             key: `Service.Add.Check.${channel.type}.${channel.channel}.${serviceId}`,
             name: `Service Add Check ${channel.type}/${channel.channel}/${serviceId}`,
             fn: () => this._checkToAdd(channel, serviceId),
-            readyFn: () => _.tuner.readyForJob(channel),
+            readyFn: signal => _.tuner.readyForJob(channel, signal),
             retryOnFail: true,
             retryMax: (1000 * 60 * 60 * 12) / (1000 * 60 * 3), // (12時間 / retryDelay) = 12時間～
             retryDelay: 1000 * 60 * 3
@@ -342,7 +345,7 @@ export class Service {
             key: `Service.Add.Scan.${channel.type}.${channel.channel}`,
             name: `Service Add Scan ${channel.type}/${channel.channel}`,
             fn: async () => this._scan(channel, true),
-            readyFn: () => _.tuner.readyForJob(channel),
+            readyFn: signal => _.tuner.readyForJob(channel, signal),
             retryOnFail: true,
             retryMax: (1000 * 60 * 60 * 12) / (1000 * 60 * 3), // (12時間 / retryDelay) = 12時間～
             retryDelay: 1000 * 60 * 3
@@ -354,7 +357,7 @@ export class Service {
             key: `Service.Update.Scan.${channel.type}.${channel.channel}`,
             name: `Service Update Scan ${channel.type}/${channel.channel}`,
             fn: async () => this._scan(channel, false),
-            readyFn: () => _.tuner.readyForJob(channel)
+            readyFn: signal => _.tuner.readyForJob(channel, signal)
         });
     }
 

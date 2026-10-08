@@ -50,7 +50,7 @@ export class Tuner {
     /**
      * readyFn
      */
-    async readyForJob(channel: ChannelItem): Promise<boolean> {
+    async readyForJob(channel: ChannelItem, signal?: AbortSignal): Promise<boolean> {
         const devices = this._getDevicesByType(channel.type);
         if (devices.length === 0) {
             log.error("readyForJob: no tuners for channel type: %s", channel.type);
@@ -58,16 +58,21 @@ export class Tuner {
         }
 
         while (true) {
+            // the job was aborted while waiting for a tuner
+            if (signal?.aborted) {
+                return false;
+            }
+
             const pickableDevices = devices.filter(device => !this._readyForJobPickedDeviceSet.has(device));
             if (pickableDevices.length === 0) {
                 log.debug("readyForJob: no pickable tuners for channel type: %s", channel.type);
-                await common.sleep(1000 * 10);
+                await common.sleep(1000 * 10, signal);
                 continue;
             }
             const device = this._pickTunerDevice(pickableDevices, channel, -1);
             if (device === null) {
                 // log.debug("readyForJob: no available tuners for channel type: %s", channel.type);
-                await common.sleep(1000 * 10);
+                await common.sleep(1000 * 10, signal);
                 continue;
             }
             // pick したチューナーを少し保持する

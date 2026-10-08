@@ -204,7 +204,7 @@ export class Channel {
                         throw new Error("EPG gathering failed");
                     }
                 },
-                readyFn: async () => {
+                readyFn: async (signal?: AbortSignal) => {
                     await common.sleep(100);
 
                     if (status.epg[networkId] === true) {
@@ -234,7 +234,7 @@ export class Channel {
                         }
                     }
 
-                    return _.tuner.readyForJob(service.channel);
+                    return _.tuner.readyForJob(service.channel, signal);
                 }
             });
         }
