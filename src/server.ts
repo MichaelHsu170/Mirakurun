@@ -97,4 +97,9 @@ import * as log from "./Mirakurun/log";
     }
 
     _.server.init();
-})();
+})().catch(err => {
+    // without this a startup failure (e.g. an empty or broken config file) is only logged as an
+    // unhandled rejection and the process keeps running without a server, so it is never restarted
+    console.error(err);
+    process.exit(1);
+});
