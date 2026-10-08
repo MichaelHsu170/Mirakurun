@@ -28,6 +28,7 @@ let idCounter = 0;
 export default class TSDecoder extends stream.Writable {
     // output
     private _output: stream.Writable;
+    private _onOutputEnd: () => void;
 
     private _id: number;
     private _command: string;
@@ -47,8 +48,9 @@ export default class TSDecoder extends stream.Writable {
         this._command = opts.command;
 
         this._output = opts.output;
-        this._output.once("finish", this._close.bind(this));
-        this._output.once("close", this._close.bind(this));
+        this._onOutputEnd = () => this._close();
+        this._output.once("finish", this._onOutputEnd);
+        this._output.once("close", this._onOutputEnd);
 
         Object.defineProperty(this, "writableLength", {
             get() { return opts.output.writableLength; }
@@ -106,6 +108,11 @@ export default class TSDecoder extends stream.Writable {
             );
             this._dead();
         });
+
+        // a spawn failure (error) and writes to a dead decoder (stdin EPIPE) would otherwise be uncaught
+        // exceptions; "close" still follows and _dead() respawns or falls back to pass-through
+        proc.once("error", err => log.error("TSDecoder#%d process error `%s`", this._id, err.message));
+        proc.stdin.on("error", err => log.warn("TSDecoder#%d stdin error `%s`", this._id, err.message));
 
         proc.stderr.pipe(process.stderr);
         proc.stdout.once("data", () => clearTimeout(this._timeout));
@@ -176,7 +183,10 @@ export default class TSDecoder extends stream.Writable {
         if (this._output.writableEnded === false) {
             this._output.end();
         }
-        this._output.removeAllListeners();
+        // remove only our own listeners: removeAllListeners() also drops Node's internal handlers
+        // on an http.ServerResponse, so the next keep-alive request on that socket hangs
+        this._output.removeListener("finish", this._onOutputEnd);
+        this._output.removeListener("close", this._onOutputEnd);
         delete this._output;
 
         --status.streamCount.decoder;

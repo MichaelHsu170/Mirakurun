@@ -90,6 +90,7 @@ export default class TSFilter extends EventEmitter {
 
     // output
     private _output: Writable;
+    private _onOutputEnd: () => void;
 
     // options
     private _provideServiceId: number;
@@ -188,8 +189,9 @@ export default class TSFilter extends EventEmitter {
         }
         if (options.output) {
             this._output = options.output;
-            this._output.once("finish", this._close.bind(this));
-            this._output.once("close", this._close.bind(this));
+            this._onOutputEnd = () => this._close();
+            this._output.once("finish", this._onOutputEnd);
+            this._output.once("close", this._onOutputEnd);
         } else {
             this._provideServiceId = null;
             this._provideEventId = null;
@@ -1067,7 +1069,10 @@ export default class TSFilter extends EventEmitter {
             if (this._output.writableEnded === false) {
                 this._output.end();
             }
-            this._output.removeAllListeners();
+            // remove only our own listeners: removeAllListeners() also drops Node's internal handlers
+            // on an http.ServerResponse, so the next keep-alive request on that socket hangs
+            this._output.removeListener("finish", this._onOutputEnd);
+            this._output.removeListener("close", this._onOutputEnd);
             delete this._output;
         }
 
