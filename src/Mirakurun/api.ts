@@ -54,6 +54,28 @@ export function responseStreamErrorHandler(res: express.Response, err: NodeJS.Er
     return responseError(res, 500, err.message);
 }
 
+/**
+ * Returns a copy of a request query without sift() operators ("$"-prefixed keys) at any depth.
+ * The query is passed to sift(), where $where runs JavaScript and $regex can block the event loop.
+ */
+export function stripQueryOperators(query: any): any {
+    if (query === null || typeof query !== "object") {
+        return query;
+    }
+    if (Array.isArray(query)) {
+        return query.map(stripQueryOperators);
+    }
+
+    const result: any = {};
+    for (const key of Object.keys(query)) {
+        if (key.startsWith("$") === false) {
+            result[key] = stripQueryOperators(query[key]);
+        }
+    }
+
+    return result;
+}
+
 export async function responseJSON(res: express.Response, body: any): Promise<express.Response> {
     // this is lighter than res.json()
     res.setHeader("Content-Type", "application/json; charset=utf-8");

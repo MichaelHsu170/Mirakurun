@@ -23,7 +23,7 @@ export const get: Operation = (req, res) => {
 
     // tslint:disable-next-line:prefer-conditional-expression
     if (Object.keys(req.query).length !== 0) {
-        programs = _.program.findByQuery(req.query);
+        programs = _.program.findByQuery(api.stripQueryOperators(req.query));
     } else {
         programs = Array.from(_.program.itemMap.values());
     }
