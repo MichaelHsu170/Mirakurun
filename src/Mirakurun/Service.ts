@@ -15,8 +15,9 @@
 */
 import { join, dirname } from "path";
 import { existsSync } from "fs";
-import { stat, mkdir, readFile, writeFile } from "fs/promises";
+import { stat, mkdir, readFile } from "fs/promises";
 import { sleep } from "./common";
+import { writeFileAtomic } from "./fileUtil";
 import * as log from "./log";
 import * as db from "./db";
 import _ from "./_";
@@ -77,7 +78,7 @@ export class Service {
         const path = Service.getLogoDataPath(networkId, logoId);
 
         try {
-            await writeFile(path, data, { encoding: "binary" });
+            await writeFileAtomic(path, data);
         } catch (e) {
             if (retrying === false) {
                 // mkdir if not exists
@@ -210,17 +211,21 @@ export class Service {
                 continue;
             }
 
-            // migrate logo data
-            if (service.logoData) {
+            // migrate logo data (a service without a valid `logoId` has no logo file to migrate to)
+            if (service.logoData && typeof service.logoId === "number" && service.logoId >= 0) {
                 const logoDataPath = Service.getLogoDataPath(service.networkId, service.logoId);
                 log.warn("migrating deprecated property `logoData` to file `%s` in service#%d (%s) db", logoDataPath, service.id, service.name);
-                Service.saveLogoData(service.networkId, service.logoId, Buffer.from(service.logoData, "base64"));
+                try {
+                    await Service.saveLogoData(service.networkId, service.logoId, Buffer.from(service.logoData, "base64"));
 
-                // delete duplicates
-                services.filter(s => s.networkId === service.networkId && s.logoId === service.logoId).forEach(s => {
-                    delete s.logoData;
-                });
-                updated = true;
+                    // delete duplicates
+                    services.filter(s => s.networkId === service.networkId && s.logoId === service.logoId).forEach(s => {
+                        delete s.logoData;
+                    });
+                    updated = true;
+                } catch (e) {
+                    log.error("failed to migrate `logoData` of service#%d (%s): %s", service.id, service.name, e);
+                }
             }
 
             this.add(

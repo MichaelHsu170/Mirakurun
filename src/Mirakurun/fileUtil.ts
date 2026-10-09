@@ -19,7 +19,7 @@ import { open, rename } from "fs/promises";
  * Writes a file so that a crash leaves either the old or the new content, never a truncated file:
  * write a temporary file next to it, flush it to disk, then rename it over the target.
  */
-export async function writeFileAtomic(path: string, data: string): Promise<void> {
+export async function writeFileAtomic(path: string, data: string | Uint8Array): Promise<void> {
     const tmpPath = `${path}.tmp`;
     const handle = await open(tmpPath, "w");
     try {

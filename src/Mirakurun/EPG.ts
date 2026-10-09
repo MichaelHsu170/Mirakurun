@@ -183,6 +183,17 @@ export default class EPG {
                         _isFollowing: isF || undefined
                     };
                     _.program.add(programItem);
+                } else if (UNKNOWN_START_TIME.compare(e.start_time) !== 0) {
+                    // the program may have been moved since it was stored (by an earlier gathering or the DB),
+                    // and later sections with this version are not out of date, so apply its time now
+                    _.program.set(id, {
+                        startAt: getTimeFromMJD(e.start_time),
+                        duration: UNKNOWN_DURATION.compare(e.duration) === 0 ? 1 : getTimeFromBCD24(e.duration),
+                        isFree: e.free_CA_mode === 0,
+                        _pf: isPF || undefined, // for compatibility
+                        _isPresent: isP || undefined,
+                        _isFollowing: isF || undefined
+                    });
                 }
 
                 state = {
@@ -410,9 +421,10 @@ export default class EPG {
                         }
                         state.group.version[eit.table_id][d.group_type] = eit.version_number;
 
-                        state.group._groups[d.group_type] = d.group_type < 4 ?
-                            d.events.map(getRelatedProgramItem.bind(d)) :
-                            d.other_network_events.map(getRelatedProgramItem.bind(d));
+                        // group_type 6-15 is reserved and has neither list
+                        state.group._groups[d.group_type] = (d.group_type < 4 ?
+                            d.events :
+                            d.other_network_events)?.map(getRelatedProgramItem.bind(d)) ?? [];
 
                         _.program.set(state.programId, {
                             relatedItems: state.group._groups.flat()
