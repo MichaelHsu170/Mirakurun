@@ -16,6 +16,9 @@
 import { Operation } from "express-openapi";
 import { event } from "../../log";
 
+// a client that stops reading would otherwise make every log line queue in memory (same limit as rpc.ts)
+const MAX_BUFFERED_BYTES = 1024 * 1024 * 16;
+
 export const get: Operation = (req, res) => {
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.status(200);
@@ -28,6 +31,11 @@ export const get: Operation = (req, res) => {
     event.on("data", _listener);
 
     function _listener(data: string) {
+        if (res.writableLength > MAX_BUFFERED_BYTES) {
+            res.destroy();
+            return;
+        }
+
         res.write(data + "\n");
     }
 };

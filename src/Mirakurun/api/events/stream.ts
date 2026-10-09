@@ -17,6 +17,9 @@ import { Operation } from "express-openapi";
 import * as apid from "../../../../api";
 import Event from "../../Event";
 
+// a client that stops reading would otherwise make every event queue in memory (same limit as rpc.ts)
+const MAX_BUFFERED_BYTES = 1024 * 1024 * 16;
+
 export const get: Operation = (req, res) => {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.status(200);
@@ -32,6 +35,11 @@ export const get: Operation = (req, res) => {
             return;
         }
         if (req.query.type && req.query.type !== message.type) {
+            return;
+        }
+
+        if (res.writableLength > MAX_BUFFERED_BYTES) {
+            res.destroy();
             return;
         }
 
