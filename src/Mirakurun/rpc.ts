@@ -27,6 +27,9 @@ import { isPermittedHost, isPermittedIPAddress } from "./system";
 import { sleep } from "./common";
 import { getStatus } from "./api/status";
 
+/** a client that stops reading would otherwise make the server buffer every notification until it runs out of memory */
+const MAX_BUFFERED_AMOUNT = 1024 * 1024 * 16;
+
 export interface JoinParams {
     rooms: string[];
 }
@@ -116,6 +119,12 @@ class NotifyManager<T> {
             };
             for (const rpc of this._rpcs) {
                 if (rpc.sockets.size > 0) {
+                    for (const socket of rpc.sockets.values()) {
+                        if (socket.ws.bufferedAmount > MAX_BUFFERED_AMOUNT) {
+                            log.warn(`${socket.data.get("ip")} - RPC #${socket.id} terminated - ${socket.ws.bufferedAmount} bytes not sent`);
+                            socket.terminate();
+                        }
+                    }
                     rpc.notifyTo(this._room, this._method, params);
                 }
             }
