@@ -132,4 +132,27 @@ describe("[Service.spec] Service.flush()", () => {
     await flush;
     assert.strictEqual(flushed, true);
   });
+
+  it("rejects when the save in progress fails", async t => {
+    const { service } = setup(t);
+    let failWrite;
+    db.saveServices = () => new Promise((resolve, reject) => { failWrite = reject; });
+    service.save();
+    t.mock.timers.tick(10 * 1000); // the timer starts the save
+
+    const flush = service.flush();
+    failWrite(new Error("ENOSPC"));
+    await assert.rejects(flush, { message: "ENOSPC" });
+  });
+
+  it("does not report an old failed save when nothing is pending", async t => {
+    const { service, saves } = setup(t);
+    db.saveServices = async data => { saves.push(data); throw new Error("ENOSPC"); };
+    service.save();
+    t.mock.timers.tick(10 * 1000); // the timer's save fails
+    await service._savePromise.catch(() => {}); // logged as unhandledRejection in the server
+
+    await service.flush();
+    assert.strictEqual(saves.length, 1);
+  });
 });

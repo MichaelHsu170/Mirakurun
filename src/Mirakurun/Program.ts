@@ -286,10 +286,16 @@ export class Program {
         log.debug("saving programs...");
 
         // TODO: Do we need to save/load logically deleted items?
-        return this._savePromise = db.savePrograms(
+        // flush() waits only for a save still in progress, not for an old (failed) one
+        const promise = db.savePrograms(
             Array.from(this._itemMap.values()),
             _.configIntegrity.channels
-        );
+        ).finally(() => {
+            if (this._savePromise === promise) {
+                this._savePromise = null;
+            }
+        });
+        return this._savePromise = promise;
     }
 
     private async _gc(): Promise<void> {

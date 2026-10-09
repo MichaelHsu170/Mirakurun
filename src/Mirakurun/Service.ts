@@ -339,10 +339,16 @@ export class Service {
         this._saveTimerId = null;
         log.debug("saving services...");
 
-        return this._savePromise = db.saveServices(
+        // flush() waits only for a save still in progress, not for an old (failed) one
+        const promise = db.saveServices(
             this._items.map(service => service.export()),
             _.configIntegrity.channels
-        );
+        ).finally(() => {
+            if (this._savePromise === promise) {
+                this._savePromise = null;
+            }
+        });
+        return this._savePromise = promise;
     }
 
     private _queueCheckToAdd(channel: ChannelItem, serviceId: number): void {

@@ -79,4 +79,27 @@ describe("[Program.spec] Program.flush()", () => {
     await flush;
     assert.strictEqual(flushed, true);
   });
+
+  it("rejects when the save in progress fails", async t => {
+    const { program } = setup(t);
+    let failWrite;
+    db.savePrograms = () => new Promise((resolve, reject) => { failWrite = reject; });
+    program.save();
+    t.mock.timers.tick(30 * 1000); // the timer starts the save
+
+    const flush = program.flush();
+    failWrite(new Error("ENOSPC"));
+    await assert.rejects(flush, { message: "ENOSPC" });
+  });
+
+  it("does not report an old failed save when nothing is pending", async t => {
+    const { program, saves } = setup(t);
+    db.savePrograms = async data => { saves.push(data); throw new Error("ENOSPC"); };
+    program.save();
+    t.mock.timers.tick(30 * 1000); // the timer's save fails
+    await program._savePromise.catch(() => {}); // logged as unhandledRejection in the server
+
+    await program.flush();
+    assert.strictEqual(saves.length, 1);
+  });
 });
