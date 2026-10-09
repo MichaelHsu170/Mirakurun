@@ -63,4 +63,20 @@ describe("[Program.spec] Program.flush()", () => {
 
     assert.strictEqual(saves.length, 1);
   });
+
+  it("waits for a save already in progress, which cleared the pending marker when it started", async t => {
+    const { program } = setup(t);
+    let finishWrite;
+    db.savePrograms = () => new Promise(resolve => { finishWrite = resolve; });
+    program.save();
+    t.mock.timers.tick(30 * 1000); // the timer starts the save
+    let flushed = false;
+
+    const flush = program.flush().then(() => { flushed = true; });
+    await new Promise(setImmediate);
+    assert.strictEqual(flushed, false);
+    finishWrite();
+    await flush;
+    assert.strictEqual(flushed, true);
+  });
 });

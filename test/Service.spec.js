@@ -116,4 +116,20 @@ describe("[Service.spec] Service.flush()", () => {
 
     assert.strictEqual(saves.length, 1);
   });
+
+  it("waits for a save already in progress, which cleared the pending marker when it started", async t => {
+    const { service } = setup(t);
+    let finishWrite;
+    db.saveServices = () => new Promise(resolve => { finishWrite = resolve; });
+    service.save();
+    t.mock.timers.tick(10 * 1000); // the timer starts the save
+    let flushed = false;
+
+    const flush = service.flush().then(() => { flushed = true; });
+    await new Promise(setImmediate);
+    assert.strictEqual(flushed, false);
+    finishWrite();
+    await flush;
+    assert.strictEqual(flushed, true);
+  });
 });

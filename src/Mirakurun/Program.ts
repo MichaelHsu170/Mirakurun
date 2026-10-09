@@ -32,6 +32,7 @@ export class Program {
     private _saveTimerId: NodeJS.Timeout;
     /** time by which pending changes are saved even if more keep arriving (0: nothing pending) */
     private _saveDeadline = 0;
+    private _savePromise: Promise<void>;
     private _emitTimerId: NodeJS.Timeout;
     private _emitRunning = false;
     private _emitPrograms = new Map<db.Program, apid.EventType>();
@@ -200,11 +201,12 @@ export class Program {
 
     /** saves the pending changes now (on shutdown) */
     async flush(): Promise<void> {
-        if (this._saveDeadline === 0) {
-            return;
+        if (this._saveDeadline !== 0) {
+            clearTimeout(this._saveTimerId);
+            this._save();
         }
-        clearTimeout(this._saveTimerId);
-        await this._save();
+        // _save() clears the pending marker when it starts: also wait for a save in progress
+        await this._savePromise;
     }
 
     async load(): Promise<void> {
@@ -284,7 +286,7 @@ export class Program {
         log.debug("saving programs...");
 
         // TODO: Do we need to save/load logically deleted items?
-        return db.savePrograms(
+        return this._savePromise = db.savePrograms(
             Array.from(this._itemMap.values()),
             _.configIntegrity.channels
         );

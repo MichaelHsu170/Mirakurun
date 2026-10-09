@@ -103,6 +103,7 @@ export class Service {
 
     private _items: ServiceItem[] = [];
     private _saveTimerId: NodeJS.Timeout;
+    private _savePromise: Promise<void>;
 
     get items(): ServiceItem[] {
         return this._items;
@@ -194,11 +195,12 @@ export class Service {
 
     /** saves the pending changes now (on shutdown) */
     async flush(): Promise<void> {
-        if (!this._saveTimerId) {
-            return;
+        if (this._saveTimerId) {
+            clearTimeout(this._saveTimerId);
+            this._save();
         }
-        clearTimeout(this._saveTimerId);
-        await this._save();
+        // _save() clears the pending marker when it starts: also wait for a save in progress
+        await this._savePromise;
     }
 
     async load(): Promise<void> {
@@ -337,7 +339,7 @@ export class Service {
         this._saveTimerId = null;
         log.debug("saving services...");
 
-        return db.saveServices(
+        return this._savePromise = db.saveServices(
             this._items.map(service => service.export()),
             _.configIntegrity.channels
         );
