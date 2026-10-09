@@ -1655,9 +1655,10 @@ describe("[scan.spec] /api/config/channel/scan : generateChannelItems", () => {
 describe("[scan.spec] PUT /api/config/channels/scan with an oversized range", () => {
     const fakeRes = () => ({
         body: null,
+        statusCode: null,
         setHeader() {},
         status() { return this; },
-        writeHead() { return this; },
+        writeHead(code) { this.statusCode = code; return this; },
         end(body) { this.body = body; }
     });
 
@@ -1668,8 +1669,10 @@ describe("[scan.spec] PUT /api/config/channels/scan with an oversized range", ()
         }
     });
 
-    it("does not leave the scan marked as running when building the scan config fails", async () => {
-        await assert.rejects(scan.put({ query: { type: "GR", minCh: "0", maxCh: "5000000000" } }, fakeRes()));
+    it("answers 400 and does not leave the scan marked as running when building the scan config fails", async () => {
+        const putRes = fakeRes();
+        await scan.put({ query: { type: "GR", minCh: "0", maxCh: "5000000000" } }, putRes);
+        assert.strictEqual(putRes.statusCode, 400);
 
         const res = fakeRes();
         await scan.get({ query: {} }, res);

@@ -830,13 +830,15 @@ export const put: Operation = async (req, res) => {
     };
 
     // Generate scan configuration
-    // (reset the flag if this throws, otherwise every later scan is refused with 409 until restart)
+    // (reset the flag if this throws, otherwise every later scan is refused with 409 until restart;
+    // answer instead of throwing: express 4 leaves the request open on a rejected handler)
     let scanConfig: ReturnType<typeof generateScanConfig>;
     try {
         scanConfig = generateScanConfig(channelOptions);
     } catch (e) {
         scanStatus.isScanning = false;
-        throw e;
+        api.responseError(res, 400, (e as Error).message);
+        return;
     }
 
     // Handle missing scan configuration
