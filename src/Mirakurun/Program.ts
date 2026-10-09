@@ -198,6 +198,15 @@ export class Program {
         this._saveTimerId = setTimeout(() => this._save(), Math.max(0, Math.min(1000 * 30, this._saveDeadline - Date.now())));
     }
 
+    /** saves the pending changes now (on shutdown) */
+    async flush(): Promise<void> {
+        if (this._saveDeadline === 0) {
+            return;
+        }
+        clearTimeout(this._saveTimerId);
+        await this._save();
+    }
+
     async load(): Promise<void> {
         log.debug("loading programs...");
 
@@ -270,12 +279,12 @@ export class Program {
         }
     }
 
-    private _save(): void {
+    private _save(): Promise<void> {
         this._saveDeadline = 0;
         log.debug("saving programs...");
 
         // TODO: Do we need to save/load logically deleted items?
-        db.savePrograms(
+        return db.savePrograms(
             Array.from(this._itemMap.values()),
             _.configIntegrity.channels
         );

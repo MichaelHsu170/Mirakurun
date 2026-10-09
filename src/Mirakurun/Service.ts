@@ -192,6 +192,15 @@ export class Service {
         this._saveTimerId = setTimeout(() => this._save(), 1000 * 10);
     }
 
+    /** saves the pending changes now (on shutdown) */
+    async flush(): Promise<void> {
+        if (!this._saveTimerId) {
+            return;
+        }
+        clearTimeout(this._saveTimerId);
+        await this._save();
+    }
+
     async load(): Promise<void> {
         log.debug("loading services...");
 
@@ -324,10 +333,11 @@ export class Service {
         });
     }
 
-    private _save(): void {
+    private _save(): Promise<void> {
+        this._saveTimerId = null;
         log.debug("saving services...");
 
-        db.saveServices(
+        return db.saveServices(
             this._items.map(service => service.export()),
             _.configIntegrity.channels
         );

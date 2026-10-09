@@ -44,6 +44,21 @@ process.on("unhandledRejection", err => {
     ++status.errorCount.unhandledRejection;
     console.error(err);
 });
+// docker stop and container-init.sh's restart send SIGTERM: save the pending program and service
+// changes first, which are otherwise written only by their timers (programs up to 5 min later)
+let isExiting = false;
+for (const signal of ["SIGTERM", "SIGINT"]) {
+    process.on(signal, () => {
+        if (isExiting) {
+            return;
+        }
+        isExiting = true;
+        log.info("%s received, saving pending changes...", signal);
+        Promise.all([_.service?.flush(), _.program?.flush()])
+            .catch(err => console.error(err))
+            .finally(() => process.exit(0));
+    });
+}
 
 function setEnv(name: string, value: string) {
     process.env[name] = process.env[name] || value;

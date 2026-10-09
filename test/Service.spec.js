@@ -82,3 +82,38 @@ describe("[Service.spec] Service.load(): migration of the deprecated `logoData`"
     assert.strictEqual(services[0].logoData, Buffer.from("logo").toString("base64"));
   });
 });
+
+describe("[Service.spec] Service.flush()", () => {
+  const setup = t => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const saves = [];
+    const originalSave = db.saveServices;
+    db.saveServices = async data => { saves.push(data); };
+    t.after(() => { db.saveServices = originalSave; });
+
+    const service = Object.create(Service.prototype);
+    service._items = [{ export: () => ({ id: 1 }) }];
+    return { service, saves };
+  };
+
+  it("saves the pending changes at once, and not again when their timer would have run", async t => {
+    const { service, saves } = setup(t);
+
+    service.save();
+    await service.flush();
+    t.mock.timers.tick(10 * 1000);
+
+    assert.deepStrictEqual(saves, [[{ id: 1 }]]);
+  });
+
+  it("saves nothing when nothing is pending", async t => {
+    const { service, saves } = setup(t);
+
+    await service.flush();
+    service.save();
+    t.mock.timers.tick(10 * 1000); // saved by its timer
+    await service.flush();
+
+    assert.strictEqual(saves.length, 1);
+  });
+});

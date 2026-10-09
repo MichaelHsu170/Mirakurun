@@ -25,7 +25,8 @@ function trap_exit() {
   if [ "$DISABLE_PCSCD" != "1" ] && [ -e "/etc/init.d/pcscd" ]; then
     /etc/init.d/pcscd stop
   fi
-  sleep 1
+  # wait for node to save its pending changes (docker stop SIGKILLs it after the stop timeout)
+  wait
   echo "exit."
 }
 trap "exit 0" 2 3 15
@@ -83,7 +84,7 @@ function start() {
 function restart() {
   echo "restarting... $(jobs -p)"
   kill $(jobs -p) > /dev/null 2>&1 || echo "already killed."
-  sleep 1
+  wait
   start
 }
 trap restart 1

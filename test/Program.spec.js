@@ -28,3 +28,39 @@ describe("[Program.spec] Program.save()", () => {
     assert.strictEqual(saved, 1);
   });
 });
+
+describe("[Program.spec] Program.flush()", () => {
+  const setup = t => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 0 });
+    const saves = [];
+    const originalSave = db.savePrograms;
+    db.savePrograms = async data => { saves.push(data); };
+    t.after(() => { db.savePrograms = originalSave; });
+
+    const program = Object.create(Program.prototype);
+    program._itemMap = new Map([[1, { id: 1 }]]);
+    program._saveDeadline = 0;
+    program._emit = () => {};
+    return { program, saves };
+  };
+
+  it("saves the pending changes at once, and not again when their timer would have run", async t => {
+    const { program, saves } = setup(t);
+
+    program.save();
+    await program.flush();
+    t.mock.timers.tick(5 * 60 * 1000);
+
+    assert.deepStrictEqual(saves, [[{ id: 1 }]]);
+  });
+
+  it("saves nothing when nothing is pending", async t => {
+    const { program, saves } = setup(t);
+
+    program.save();
+    t.mock.timers.tick(30 * 1000); // saved by its timer
+    await program.flush();
+
+    assert.strictEqual(saves.length, 1);
+  });
+});
