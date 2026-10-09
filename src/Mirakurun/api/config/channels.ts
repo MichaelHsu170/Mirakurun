@@ -19,8 +19,17 @@ import * as apid from "../../../../api";
 import * as config from "../../config";
 
 export const get: Operation = async (req, res) => {
+    let channels: apid.ConfigChannels;
+    try {
+        channels = await config.loadChannels() as apid.ConfigChannels;
+    } catch (e) {
+        // Express 4 does not handle a rejected handler, which would leave the request hanging
+        api.responseError(res, 500, (e as Error).message);
+        return;
+    }
+
     res.status(200);
-    api.responseJSON(res, await config.loadChannels() as apid.ConfigChannels);
+    api.responseJSON(res, channels);
 };
 
 get.apiDoc = {
@@ -45,7 +54,12 @@ get.apiDoc = {
 export const put: Operation = async (req, res) => {
     const channels: apid.ConfigChannels = req.body;
 
-    await config.saveChannels(channels);
+    try {
+        await config.saveChannels(channels);
+    } catch (e) {
+        api.responseError(res, 500, (e as Error).message);
+        return;
+    }
 
     res.status(200);
     api.responseJSON(res, channels);

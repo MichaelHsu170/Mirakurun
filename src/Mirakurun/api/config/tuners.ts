@@ -19,8 +19,17 @@ import * as apid from "../../../../api";
 import * as config from "../../config";
 
 export const get: Operation = async (req, res) => {
+    let tuners: apid.ConfigTuners;
+    try {
+        tuners = await config.loadTuners() as apid.ConfigTuners;
+    } catch (e) {
+        // Express 4 does not handle a rejected handler, which would leave the request hanging
+        api.responseError(res, 500, (e as Error).message);
+        return;
+    }
+
     res.status(200);
-    api.responseJSON(res, await config.loadTuners() as apid.ConfigTuners);
+    api.responseJSON(res, tuners);
 };
 
 get.apiDoc = {
@@ -45,7 +54,12 @@ get.apiDoc = {
 export const put: Operation = async (req, res) => {
     const tuners: apid.ConfigTuners = req.body;
 
-    await config.saveTuners(tuners);
+    try {
+        await config.saveTuners(tuners);
+    } catch (e) {
+        api.responseError(res, 500, (e as Error).message);
+        return;
+    }
 
     res.status(200);
     api.responseJSON(res, tuners);
