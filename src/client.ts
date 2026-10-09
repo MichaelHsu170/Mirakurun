@@ -22,6 +22,7 @@ import * as apid from "../api";
 import { IncomingHttpHeaders } from "http";
 const pkg = require("../package.json");
 const spec = yaml.load(fs.readFileSync(__dirname + "/../api.yml", "utf8")) as OpenAPIV2.Document;
+const MAX_REDIRECTS = 5;
 
 export type RequestMethod = "GET" | "POST" | "PUT" | "DELETE";
 
@@ -141,11 +142,18 @@ export class Client {
                     const chunks: Buffer[] = [];
 
                     res.on("data", chunk => chunks.push(chunk as Buffer));
+                    // an aborted response emits no "end"
+                    res.on("error", (err: any) => reject(new ErrorResponse({ ...ret, isSuccess: false, body: err })));
                     res.on("end", () => {
                         const buffer = Buffer.concat(chunks);
 
                         if (ret.contentType === "application/json") {
-                            ret.body = JSON.parse(buffer.toString("utf8"));
+                            try {
+                                ret.body = JSON.parse(buffer.toString("utf8"));
+                            } catch (e) {
+                                reject(new ErrorResponse({ ...ret, isSuccess: false, body: e }));
+                                return;
+                            }
                         } else if (ret.contentType === "text/plain") {
                             ret.body = buffer.toString("utf8");
                         } else {
@@ -230,7 +238,7 @@ export class Client {
                 continue;
             }
             if (p.in === "path") {
-                path = path.replace(`{${p.name}}`, param[p.name]);
+                path = path.replace(`{${p.name}}`, encodeURIComponent(String(param[p.name])));
             } else if (p.in === "header") {
                 option.headers[p.name] = param[p.name];
             } else if (p.in === "query") {
@@ -513,7 +521,7 @@ export class Client {
         return res.body;
     }
 
-    private _httpRequest(method: RequestMethod, path: string, option: RequestOption = {}): Promise<http.IncomingMessage> {
+    private _httpRequest(method: RequestMethod, path: string, option: RequestOption = {}, redirects = 0): Promise<http.IncomingMessage> {
         const opt: http.RequestOptions = {
             method: method,
             path: this.basePath + path,
@@ -559,11 +567,16 @@ export class Client {
         return new Promise((resolve, reject) => {
             const req = http.request(opt, res => {
                 if (res.statusCode > 300 && res.statusCode < 400 && res.headers.location) {
+                    res.resume();
                     if (/^\//.test(res.headers.location) === false) {
                         reject(new Error(`Redirecting location "${res.headers.location}" isn't supported.`));
                         return;
                     }
-                    this._httpRequest(method, res.headers.location, option)
+                    if (redirects >= MAX_REDIRECTS) {
+                        reject(new Error(`Too many redirects (more than ${MAX_REDIRECTS}).`));
+                        return;
+                    }
+                    this._httpRequest(method, res.headers.location, option, redirects + 1)
                         .then(resolve, reject);
                     return;
                 }
@@ -597,6 +610,7 @@ export class Client {
             return res;
         } else {
             if (res.statusCode) {
+                res.resume(); // free the socket
                 throw new Error(`Bad status respond (${res.statusCode} ${res.statusMessage}).`);
             }
             throw res;

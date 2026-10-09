@@ -45,6 +45,8 @@ client.getChannelStream(opt.type, opt.channel, opt.decode)
         stream = _stream;
         stream.pipe(process.stdout);
         stream.once("end", () => exit());
+        // an aborted stream emits no "end"
+        stream.once("close", () => exit(1));
     })
     .catch(err => {
         if (err.req) {
