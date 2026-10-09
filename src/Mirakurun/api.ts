@@ -26,7 +26,9 @@ export interface Error {
 
 export function responseError(res: express.Response, code: number, reason?: string): express.Response {
     if (reason) {
-        res.writeHead(code, reason, {
+        // a status message may not contain a newline (a YAML error, `Command failed: …\n<stderr>`):
+        // writeHead() would throw and leave the request open. The body keeps the full reason.
+        res.writeHead(code, reason.replace(/[^\t\x20-\x7e]/g, " "), {
             "Content-Type": "application/json"
         });
     } else {

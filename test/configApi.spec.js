@@ -3,6 +3,7 @@ const assert = require("assert");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const request = require("./apiRequest");
 
 // config.ts reads the paths when it is loaded. Each file is broken YAML, and a directory in the way of
 // its `.tmp` file makes every save fail.
@@ -15,34 +16,23 @@ for (const name of ["server", "tuners", "channels"]) {
   process.env[`${name.toUpperCase()}_CONFIG_PATH`] = file;
 }
 
-const fakeRes = () => ({
-  code: null,
-  setHeader() {},
-  status(code) { this.code = code; return this; },
-  writeHead(code) { this.code = code; return this; },
-  end() { this.ended = true; }
-});
-
 for (const name of ["server", "tuners", "channels"]) {
   const handler = require(`../lib/Mirakurun/api/config/${name}`);
 
   describe(`[configApi.spec] /api/config/${name}`, () => {
-    it("GET answers 500 when the config file cannot be read, instead of leaving the request open", async () => {
-      const res = fakeRes();
+    it("GET answers 500 with the multi-line YAML error when the config file cannot be read, instead of leaving the request open", async () => {
+      const { status, body } = await request(handler.get);
 
-      await handler.get({ query: {} }, res);
-
-      assert.strictEqual(res.code, 500);
-      assert.strictEqual(res.ended, true);
+      assert.strictEqual(status, 500);
+      assert.match(body.reason, /unclosed/);
+      assert.match(body.reason, /\n/);
     });
 
     it("PUT answers 500 when the config file cannot be written, instead of leaving the request open", async () => {
-      const res = fakeRes();
+      const { status, body } = await request(handler.put, { body: name === "server" ? {} : [] });
 
-      await handler.put({ query: {}, body: name === "server" ? {} : [] }, res);
-
-      assert.strictEqual(res.code, 500);
-      assert.strictEqual(res.ended, true);
+      assert.strictEqual(status, 500);
+      assert.match(body.reason, /EISDIR/);
     });
   });
 }
