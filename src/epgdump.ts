@@ -17,7 +17,7 @@ import * as stream from "stream";
 import * as fs from "fs";
 import * as path from "path";
 
-if (process.argv.length < 3) {
+if (process.argv.length < 4) {
     console.error("Mirakurun EPG Dump Test Program");
     console.error("Usage: mirakurun-epgdump [-f] src.ts dest.json");
     process.exit(1);
