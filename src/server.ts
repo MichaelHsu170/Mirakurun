@@ -45,7 +45,9 @@ process.on("unhandledRejection", err => {
     console.error(err);
 });
 // docker stop and container-init.sh's restart send SIGTERM: save the pending program and service
-// changes first, which are otherwise written only by their timers (programs up to 5 min later)
+// changes first, which are otherwise written only by their timers (programs up to 5 min later).
+// Both are awaited even if one fails, so a failed save does not cut off the other.
+const SHUTDOWN_SAVE_TIMEOUT = 25 * 1000;
 let isExiting = false;
 for (const signal of ["SIGTERM", "SIGINT"]) {
     process.on(signal, () => {
@@ -54,8 +56,21 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
         }
         isExiting = true;
         log.info("%s received, saving pending changes...", signal);
-        Promise.all([_.service?.flush(), _.program?.flush()])
-            .catch(err => console.error(err))
+        // a hung write must not keep the process alive: container-init.sh's restart waits for it with no
+        // limit (docker stop kills it after stop_grace_period, 30 s in docker-compose.yml).
+        // process.exit() would itself wait for the libuv thread that is stuck in the write, so kill instead
+        setTimeout(() => {
+            console.error("saving pending changes timed out, exiting without them");
+            process.kill(process.pid, "SIGKILL");
+        }, SHUTDOWN_SAVE_TIMEOUT).unref();
+        Promise.allSettled([_.service?.flush(), _.program?.flush()])
+            .then(results => {
+                for (const result of results) {
+                    if (result.status === "rejected") {
+                        console.error(result.reason);
+                    }
+                }
+            })
             .finally(() => process.exit(0));
     });
 }
