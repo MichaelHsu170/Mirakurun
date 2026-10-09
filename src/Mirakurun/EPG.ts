@@ -323,6 +323,11 @@ export default class EPG {
                                     .join("\n\n");
                             }
 
+                            // set() merges objects: drop the stored items the broadcaster no longer sends
+                            const item = _.program.get(state.programId);
+                            if (item && item.extended && Object.keys(item.extended).some(key => !(key in extended))) {
+                                delete item.extended;
+                            }
                             _.program.set(state.programId, {
                                 extended: extended
                             });

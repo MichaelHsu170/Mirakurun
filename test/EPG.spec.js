@@ -11,6 +11,7 @@ beforeEach(() => {
   store = new Map();
   _.program = {
     exists: id => store.has(id),
+    get: id => store.get(id),
     add: item => store.set(item.id, { ...item }),
     set: (id, props) => Object.assign(store.get(id), props)
   };
@@ -77,5 +78,44 @@ describe("[EPG.spec] EPG.write()", () => {
       assert.deepStrictEqual(program.genres, [{ lv1: 1, lv2: 0, un1: 0, un2: 0 }]);
       assert.deepStrictEqual(program.relatedItems, []);
     }
+  });
+
+  describe("extended_event", () => {
+    const { updateObject } = require("../lib/Mirakurun/common");
+    const text = s => Buffer.from([0x0E, ...Buffer.from(s)]); // LS1: the alphanumeric set, decoded as full-width
+    const extendedEvent = items => ({
+      descriptor_tag: 0x4E,
+      descriptor_number: 0,
+      last_descriptor_number: 0,
+      items: Object.entries(items).map(([key, value]) => ({
+        item_description_length: key.length + 1,
+        item_description_char: text(key),
+        item_char: text(value)
+      }))
+    });
+    const gather = (version, items) => new EPG().write(eit(version, [
+      event(100, startTime(20, 0), duration(1, 0), [extendedEvent(items)])
+    ]));
+    // merges like Program.set(), and records whether a set changed the program
+    let updates;
+    beforeEach(() => {
+      updates = [];
+      _.program.set = (id, props) => updates.push(updateObject(store.get(id), props));
+    });
+
+    it("drops the items that a new version of the descriptors no longer has", () => {
+      gather(1, { cast: "A", note: "old" });
+      gather(2, { note: "new" });
+
+      assert.deepStrictEqual([...store.values()][0].extended, { "ｎｏｔｅ": "ｎｅｗ" });
+    });
+
+    it("leaves an unchanged program unchanged", () => {
+      gather(1, { cast: "A", note: "old" });
+      updates = [];
+      gather(2, { cast: "A", note: "old" });
+
+      assert.deepStrictEqual(updates, [false, false]); // the event's times, then extended
+    });
   });
 });
