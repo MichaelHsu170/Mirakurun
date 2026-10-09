@@ -29,6 +29,15 @@ export function getGlobalServiceId(networkId: number, serviceId: number): number
     return parseInt(networkId + (serviceId / 100000).toFixed(5).slice(2), 10);
 }
 
+/** whether `url` (relative to this page) is an http(s) URL; anything else, e.g. `javascript:`, must not be opened */
+export function isHttpURL(url: string): boolean {
+    try {
+        return /^https?:$/.test(new URL(url, location.href).protocol);
+    } catch (e) {
+        return false;
+    }
+}
+
 export function getIdWithHex(id: number): string {
     return `0x${id.toString(16).toUpperCase()} (${id})`;
 }
@@ -93,7 +102,8 @@ export class LazyCaller<T extends Function> {
 
                 _lazy._running = false;
                 if (_lazy._activate && _lazy.caller) {
-                    setTimeout(_lazy.caller.apply(this, _lazy._activate), 0);
+                    const activateArgs = _lazy._activate;
+                    setTimeout(() => _lazy.caller?.apply(this, activateArgs), 0);
                 }
             }, _lazy.msDelay);
         } as any as T;

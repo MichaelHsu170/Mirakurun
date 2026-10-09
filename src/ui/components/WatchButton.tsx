@@ -16,7 +16,7 @@
 import * as React from "react";
 import { useState, useEffect } from "react";
 import { Button, ButtonGroup, ButtonProps, Menu, MenuItem, Popover, PopoverTargetProps, Placement } from "@blueprintjs/core";
-import { copyToClipboard } from "../modules/common";
+import { copyToClipboard, isHttpURL } from "../modules/common";
 import { state } from "../modules/state";
 
 type WatchButtonProps = {
@@ -36,15 +36,17 @@ export const WatchButton: React.FC<WatchButtonProps> = ({ globalServiceId, popov
                 return;
             }
 
-            await state.fetchServerConfig();
-
-            if (state.serverConfig) {
-                setLoading(false);
+            try {
+                await state.fetchServerConfig();
+            } catch (e) {
+                // without the config the play button stays disabled, but the stream menu still works
+                console.error(e);
             }
+            setLoading(false);
         })();
     }, []);
 
-    const tsplayDisabled = !state.serverConfig?.tsplayEndpoint || !state.serverConfig?.allowPNA;
+    const tsplayDisabled = !state.serverConfig?.tsplayEndpoint || !state.serverConfig?.allowPNA || !isHttpURL(state.serverConfig.tsplayEndpoint);
     const streamEndpoint = `${location.protocol}//${location.host}/api/services/${globalServiceId}/stream`;
 
     return (<>

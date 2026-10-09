@@ -35,6 +35,7 @@ import {
 } from "@blueprintjs/core";
 import { state } from "../modules/state";
 import * as ui from "../modules/ui";
+import { isHttpURL } from "../modules/common";
 import { Service, Status, StreamInfo, TunerDevice } from "../../../api.d";
 
 import "./HomeView.sass";
@@ -171,7 +172,7 @@ const ServicesSection: React.FC<{
                                     }
                                 </span>
                             </Link>
-                            {service.type === 0x01 && allowPNA && tsplayEndpoint && (
+                            {service.type === 0x01 && allowPNA && tsplayEndpoint && isHttpURL(tsplayEndpoint) && (
                                 <span
                                     className="service-play"
                                     onClick={(e) => {
@@ -179,7 +180,7 @@ const ServicesSection: React.FC<{
                                         window.open(
                                             `${tsplayEndpoint}#${location.protocol}//${location.host}/api/services/${service.id}/stream?decode=1`,
                                             "_blank",
-                                            "popup"
+                                            "noopener,popup"
                                         );
                                     }}
                                     title="TSPlay (Experimental)"
@@ -428,7 +429,15 @@ const TunersSection: React.FC<{
                                 text="Kill"
                                 onClick={() => {
                                     (async () => {
-                                        await fetch(`/api/tuners/${killTarget}/process`, { method: "DELETE" });
+                                        try {
+                                            const res = await fetch(`/api/tuners/${killTarget}/process`, { method: "DELETE" });
+                                            if (!res.ok) {
+                                                throw new Error(`${res.status} ${await res.text()}`);
+                                            }
+                                        } catch (err) {
+                                            console.error(err);
+                                            window.alert(`Kill に失敗しました: ${err}`);
+                                        }
                                     })();
                                     setKillTarget(null);
                                 }}

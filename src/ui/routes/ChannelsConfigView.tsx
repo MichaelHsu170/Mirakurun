@@ -193,9 +193,11 @@ export const ChannelsConfigView: React.FC = () => {
                 await fetchScanStatus();
             } else {
                 console.error("Failed to start scan:", result);
+                window.alert(`スキャンを開始できませんでした: ${response.status} ${result?.reason ?? ""}`);
             }
         } catch (e) {
             console.error("Error starting scan:", e);
+            window.alert(`スキャンを開始できませんでした: ${e}`);
         }
     };
 
@@ -350,6 +352,9 @@ export const ChannelsConfigView: React.FC = () => {
         const newEditing = [...editing];
         const ch = { ...newEditing[chIndex] };
         const commandVars = { ...(ch.commandVars || {}) };
+
+        // renaming onto another variable would silently drop that variable
+        if (newKey !== oldKey && newKey in commandVars) return;
 
         const updatedVars: Record<string, string | number> = {};
         Object.entries(commandVars).forEach(([k, v]) => {
@@ -625,8 +630,9 @@ export const ChannelsConfigView: React.FC = () => {
                                         <div className="cmd-vars-container">
                                             <div className="cmd-vars-title">Command Vars</div>
                                             <div className="cmd-vars-list">
-                                                {ch.commandVars && Object.entries(ch.commandVars).map(([key, value]) => (
-                                                    <div key={key} className="cmd-var-pair">
+                                                {ch.commandVars && Object.entries(ch.commandVars).map(([key, value], j) => (
+                                                    // keyed by position: the name is what is being edited, and a changing key would remount the input
+                                                    <div key={j} className="cmd-var-pair">
                                                         <InputGroup
                                                             small
                                                             className="cmd-var-key"

@@ -523,8 +523,8 @@ export const EPGTable: React.FC<EPGTableProps> = ({ date, channelType, globalSer
                     </div>
                 );
             } else {
-                // 週間番組表
-                for (let i = 0; i < splitIndexes.length; i++) {
+                // 週間番組表 (the cells after the last split are the last, partial day; at most 8 days are shown)
+                for (let i = 0; i <= splitIndexes.length && i < 8; i++) {
                     cols.push(
                         <div key={`${service.id}-${i}`}
                             className="timetable-col"

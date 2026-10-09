@@ -22,9 +22,14 @@ export function useLocalStorageState<T>(key: string, initState: T): [T, (newStat
     const [stored, setStored] = useState<T>();
 
     if (stored === undefined) {
-        const storedState = localStorage.getItem(key);
-        if (storedState !== null) {
-            initState = JSON.parse(storedState) as T;
+        // blocked storage or a corrupt value must not break the UI: fall back to initState
+        try {
+            const storedState = localStorage.getItem(key);
+            if (storedState !== null) {
+                initState = JSON.parse(storedState) as T;
+            }
+        } catch (e) {
+            console.error("hooks", "useLocalStorageState()", key, e);
         }
 
         setStored(initState);
@@ -40,10 +45,14 @@ export function useLocalStorageState<T>(key: string, initState: T): [T, (newStat
             return;
         }
 
-        if (newState === undefined) {
-            localStorage.removeItem(key);
-        } else {
-            localStorage.setItem(key, JSON.stringify(newState));
+        try {
+            if (newState === undefined) {
+                localStorage.removeItem(key);
+            } else {
+                localStorage.setItem(key, JSON.stringify(newState));
+            }
+        } catch (e) {
+            console.error("hooks", "useLocalStorageState()", key, e);
         }
 
         setState(newState);
@@ -62,9 +71,14 @@ export function useSessionStorageState<T>(key: string, initState: T): [T, (newSt
     const [stored, setStored] = useState<T>();
 
     if (stored === undefined) {
-        const storedState = sessionStorage.getItem(key);
-        if (storedState !== null) {
-            initState = JSON.parse(storedState) as T;
+        // blocked storage or a corrupt value must not break the UI: fall back to initState
+        try {
+            const storedState = sessionStorage.getItem(key);
+            if (storedState !== null) {
+                initState = JSON.parse(storedState) as T;
+            }
+        } catch (e) {
+            console.error("hooks", "useSessionStorageState()", key, e);
         }
 
         setStored(initState);
@@ -80,10 +94,14 @@ export function useSessionStorageState<T>(key: string, initState: T): [T, (newSt
             return;
         }
 
-        if (newState === undefined) {
-            sessionStorage.removeItem(key);
-        } else {
-            sessionStorage.setItem(key, JSON.stringify(newState));
+        try {
+            if (newState === undefined) {
+                sessionStorage.removeItem(key);
+            } else {
+                sessionStorage.setItem(key, JSON.stringify(newState));
+            }
+        } catch (e) {
+            console.error("hooks", "useSessionStorageState()", key, e);
         }
 
         setState(newState);

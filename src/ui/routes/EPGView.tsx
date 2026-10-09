@@ -50,7 +50,8 @@ export const EPGView: React.FC = () => {
     let date = DateTime.fromISO(isoDate);
 
     if (globalServiceId) {
-        date = date.set({ day: now.day });
+        // the weekly table always starts today
+        date = startDate;
     }
 
     if (typeQuery) {

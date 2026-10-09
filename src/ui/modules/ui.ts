@@ -67,6 +67,12 @@ function escapeHTML(text: string): string {
         .replace(/'/g, "&#39;");
 }
 
+/** Whether `index` of `html` is inside a link made by an earlier pass (the escaped text itself has no `<a `). */
+function isInsideLink(html: string, index: number): boolean {
+    const before = html.slice(0, index);
+    return before.lastIndexOf("<a ") > before.lastIndexOf("</a>");
+}
+
 /** Returns HTML for broadcast text with links. The text is escaped first: it is set with dangerouslySetInnerHTML. */
 export function autoLink(text: string): string {
     return escapeHTML(text)
@@ -83,12 +89,18 @@ export function autoLink(text: string): string {
             }
             return `<a referrerpolicy="no-referrer" target="_blank" href="${url}" title="外部サイト">${text}</a>`;
         })
-        .replace(regexp.epgXLinkFormat, (text, username) => {
+        .replace(regexp.epgXLinkFormat, (text, username, offset, html) => {
+            if (isInsideLink(html, offset + text.length - username.length)) {
+                return text;
+            }
             return text.replace(username,
                 `<a referrerpolicy="no-referrer" target="_blank" href="https://x.com/${username.slice(1)}" title="X">${username}</a>`
             );
         })
-        .replace(regexp.epgInstagramLinkFormat, (text, username) => {
+        .replace(regexp.epgInstagramLinkFormat, (text, username, offset, html) => {
+            if (isInsideLink(html, offset + text.length - username.length)) {
+                return text;
+            }
             return text.replace(username,
                 `<a referrerpolicy="no-referrer" target="_blank" href="https://instagram.com/${username.slice(1)}" title="Instagram">${username}</a>`
             );

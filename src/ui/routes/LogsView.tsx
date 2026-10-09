@@ -68,13 +68,27 @@ export const LogsView: React.FC = () => {
         }
 
         // 初期ログを取得
+        // (the logs room is joined first, so the lines it delivered before the fetch finished are also in the
+        // fetched history: drop them there; and do not write into the cache after this view is left)
+        let alive = true;
+        let liveLines: Set<string> | null = new Set();
         (async () => {
-            const lines: string = await (await fetch("/api/log")).text();
-            onLogs(lines.trim().split("\n"), true);
+            try {
+                const lines: string = await (await fetch("/api/log")).text();
+                if (alive) {
+                    onLogs(lines.trim().split("\n").filter(line => !liveLines.has(line)), true);
+                }
+            } catch (e) {
+                console.error("LogsView", e);
+            }
+            liveLines = null;
         })();
 
         // state の logs イベントをサブスクライブ
         const onLogsEvent = (lines: string[], unshift: boolean) => {
+            if (liveLines) {
+                lines.forEach(line => liveLines.add(line));
+            }
             onLogs(lines, unshift);
         };
         state.on("logs", onLogsEvent);
@@ -85,6 +99,7 @@ export const LogsView: React.FC = () => {
                 rpc.call("leave", { rooms: ["logs"] } as JoinParams);
             }
             state.off("logs", onLogsEvent);
+            alive = false;
             logListCache = [];
         };
     }, []);

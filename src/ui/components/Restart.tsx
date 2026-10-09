@@ -21,7 +21,15 @@ export const Restart: React.FC<{
     onClose: () => void;
 }> = ({ isOpen, onClose }) => {
     const handleRestart = async () => {
-        await fetch("/api/restart", { method: "PUT" });
+        try {
+            const res = await fetch("/api/restart", { method: "PUT" });
+            if (!res.ok) {
+                throw new Error(`${res.status} ${await res.text()}`);
+            }
+        } catch (err) {
+            console.error(err);
+            window.alert(`Restart failed: ${err}`);
+        }
         onClose();
     };
 

@@ -77,6 +77,8 @@ class State extends EventEmitter<StateEventTypes> {
     serverConfig?: ConfigServer;
 
     private _rpc?: RPCClient;
+    /** program events received while the programs are being fetched */
+    private _programEvents?: Event[];
 
     constructor() {
         super();
@@ -166,11 +168,25 @@ class State extends EventEmitter<StateEventTypes> {
             }
             return;
         }
-        this._joinProgramEvents = () => {
-            this.fetchPrograms();
-            this._rpc.call("join", {
-                rooms: ["events:program"],
-            } as JoinParams);
+        // the fetched programs replace the array the events are applied to: keep the events that arrive
+        // meanwhile and apply them again to the fetched programs
+        this._joinProgramEvents = async () => {
+            const events: Event[] = this._programEvents = [];
+            try {
+                await this._rpc.call("join", {
+                    rooms: ["events:program"],
+                } as JoinParams);
+                await this.fetchPrograms();
+            } catch (e) {
+                console.error("state", "subscribePrograms()", e);
+            }
+            if (this._programEvents !== events) {
+                return; // a later run (after a reconnect) fetches again and applies the events itself
+            }
+            this._programEvents = undefined;
+            if (events.length > 0) {
+                await this._rpc.methods.get("events")(null, { array: events } as NotifyParams<Event>);
+            }
         };
 
         this._rpc.on("connected", this._joinProgramEvents);
@@ -240,20 +256,24 @@ class State extends EventEmitter<StateEventTypes> {
             this.emit("statusName", this.statusName);
             this.emit("statusIconKey", this.statusIconKey);
 
-            await rpc.call("join", {
-                rooms: [
-                    "events:service",
-                    "events:tuner",
-                    "events:job",
-                    "events:job_schedule"
-                ],
-            } as JoinParams);
+            try {
+                await rpc.call("join", {
+                    rooms: [
+                        "events:service",
+                        "events:tuner",
+                        "events:job",
+                        "events:job_schedule"
+                    ],
+                } as JoinParams);
 
-            await this.fetchStatus();
-            await this.fetchServices();
-            await this.fetchTuners();
-            await this.fetchJobs();
-            await this.fetchJobSchedules();
+                await this.fetchStatus();
+                await this.fetchServices();
+                await this.fetchTuners();
+                await this.fetchJobs();
+                await this.fetchJobSchedules();
+            } catch (e) {
+                console.error("rpc:connected", e);
+            }
 
             // a disconnect + reconnect during the awaits above can run this twice; clear the timers of
             // an earlier run so they do not pile up
@@ -263,13 +283,13 @@ class State extends EventEmitter<StateEventTypes> {
             // periodic refresh (every 5s)
             _statusRefreshInterval = setInterval(async () => {
                 if (document.hidden) { return; }
-                await this.fetchStatus();
+                await this.fetchStatus().catch(e => console.error("state", "fetchStatus()", e));
             }, 1000 * 5);
 
             // periodic refresh (every 60s, for data not covered by push events like logo)
             _servicesRefreshInterval = setInterval(async () => {
                 if (document.hidden) { return; }
-                await this.fetchServices();
+                await this.fetchServices().catch(e => console.error("state", "fetchServices()", e));
             }, 1000 * 60);
         });
 
@@ -301,6 +321,10 @@ class State extends EventEmitter<StateEventTypes> {
             for (const event of array) {
                 switch (event.resource) {
                     case "program": {
+                        if (this._programEvents) {
+                            this._programEvents.push(event);
+                            break;
+                        }
                         const program = event.data as Program;
                         const index = this.programs.findIndex(p => p.id === program.id);
                         if (event.type === "remove") {
@@ -333,7 +357,12 @@ class State extends EventEmitter<StateEventTypes> {
                     }
                     case "tuner": {
                         const tuner = event.data as TunerDevice;
-                        this.tuners[this.tuners.findIndex(value => value.index === tuner.index)] = tuner;
+                        const index = this.tuners.findIndex(value => value.index === tuner.index);
+                        if (index === -1) {
+                            this.tuners.push(tuner);
+                        } else {
+                            this.tuners[index] = tuner;
+                        }
                         tunersUpdated = true;
                         break;
                     }

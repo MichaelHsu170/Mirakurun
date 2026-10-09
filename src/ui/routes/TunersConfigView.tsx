@@ -322,7 +322,7 @@ export const TunersConfigView: React.FC = () => {
                                                                 const val = e.target.value;
                                                                 if (val === "") {
                                                                     deleteTunerProperty(i, "remoteMirakurunHost");
-                                                                } else if (/^[0-9a-z\.]+$/.test(val)) {
+                                                                } else if (/^[0-9A-Za-z.:-]+$/.test(val)) { // a hostname, IPv4 or IPv6 address
                                                                     updateTuner(i, { remoteMirakurunHost: val });
                                                                 }
                                                             }}
