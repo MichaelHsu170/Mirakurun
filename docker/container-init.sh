@@ -20,13 +20,16 @@ export MALLOC_ARENA_MAX=2
 
 # trap
 function trap_exit() {
+  # ignore restart requests (SIGHUP) while shutting down: restart() would start a new node
+  trap '' 1
   echo "stopping... $(jobs -p)"
   kill $(jobs -p) > /dev/null 2>&1 || echo "already killed."
+  # wait for node to save its pending changes (docker stop SIGKILLs it after the stop timeout);
+  # pcscd is stopped only after node has exited, as node keeps streaming until then
+  wait
   if [ "$DISABLE_PCSCD" != "1" ] && [ -e "/etc/init.d/pcscd" ]; then
     /etc/init.d/pcscd stop
   fi
-  # wait for node to save its pending changes (docker stop SIGKILLs it after the stop timeout)
-  wait
   echo "exit."
 }
 trap "exit 0" 2 3 15
