@@ -319,7 +319,8 @@ export class Job {
             return;
         }
 
-        for (const job of this._queuedJobItems) {
+        // iterate a copy: _checkReady() removes the job from the queue
+        for (const job of [...this._queuedJobItems]) {
             if (this._standbyJobItems.length >= this.maxStandby) {
                 break;
             }

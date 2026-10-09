@@ -29,3 +29,20 @@ describe("[Job.spec] a job waiting in readyFn", () => {
     await waited;
   });
 });
+
+describe("[Job.spec] Job#_checkQueue()", () => {
+  it("moves every queued job to standby while standby has room", () => {
+    const job = new Job();
+    job.maxStandby = 10;
+    const waiting = () => new Promise(() => {}); // e.g. readyForJob while every tuner is busy
+    job._queuedJobItems.push(...["A", "B", "C", "D"].map((key, i) => ({
+      key, name: key, fn: async () => {}, readyFn: waiting, id: `test${i}`, ac: new AbortController(), createdAt: 0, retryCount: 0
+    })));
+
+    job._checkQueue();
+
+    assert.deepStrictEqual(job._standbyJobItems.map(item => item.key), ["A", "B", "C", "D"]);
+    assert.deepStrictEqual(job._queuedJobItems, []);
+    job.close();
+  });
+});
