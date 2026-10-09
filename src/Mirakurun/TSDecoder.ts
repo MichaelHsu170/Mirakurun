@@ -106,6 +106,10 @@ export default class TSDecoder extends stream.Writable {
                 "TSDecoder#%d process has closed with exit code=%d by signal `%s` (pid=%d)",
                 this._id, code, signal, proc.pid
             );
+            // a process that _kill() has already replaced or removed was counted when it was killed
+            if (proc !== this._process) {
+                return;
+            }
             this._dead();
         });
 
@@ -156,6 +160,8 @@ export default class TSDecoder extends stream.Writable {
     }
 
     private _kill(): void {
+        clearTimeout(this._timeout);
+
         if (this._process) {
             this._process.kill("SIGKILL");
             delete this._process;
