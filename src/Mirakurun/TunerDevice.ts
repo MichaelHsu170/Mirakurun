@@ -391,17 +391,21 @@ export default class TunerDevice extends EventEmitter {
         await new Promise<void>(resolve => {
             this.once("release", resolve);
 
+            // signal only this process: if it has already exited, its "exit" listener never clears the timer,
+            // and by then `this._process` can be the device's next process (or null)
+            const proc = this._process;
+
             if (/^dvbv5-zap /.test(this._command) === true) {
-                this._process.kill("SIGKILL");
+                proc.kill("SIGKILL");
             } else {
                 const timer = setTimeout(() => {
                     log.warn("TunerDevice#%d will force killed because SIGTERM timed out...", this._index);
-                    this._process.kill("SIGKILL");
+                    proc.kill("SIGKILL");
                 }, 6000);
-                this._process.once("exit", () => clearTimeout(timer));
+                proc.once("exit", () => clearTimeout(timer));
 
                 // regular way
-                this._process.kill("SIGTERM");
+                proc.kill("SIGTERM");
             }
         });
     }
@@ -422,6 +426,11 @@ export default class TunerDevice extends EventEmitter {
         if (this._closing === false && this._users.size !== 0) {
             log.warn("TunerDevice#%d respawning because request has not closed", this._index);
             ++status.errorCount.tunerDeviceRespawn;
+
+            // _end() made the device unavailable; the respawned process can be shared and taken over again
+            if (this._isFault === false) {
+                this._isAvailable = true;
+            }
 
             this._spawn(this._channel);
             return;
