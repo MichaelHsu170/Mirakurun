@@ -183,7 +183,11 @@ export default class EPG {
                         _isFollowing: isF || undefined
                     };
                     _.program.add(programItem);
-                } else if (UNKNOWN_START_TIME.compare(e.start_time) !== 0) {
+                } else if (
+                    UNKNOWN_START_TIME.compare(e.start_time) !== 0 &&
+                    // a schedule section is older than the p/f time of a present or following program
+                    (isPF || !(_.program.get(id)._isPresent || _.program.get(id)._isFollowing))
+                ) {
                     // the program may have been moved since it was stored (by an earlier gathering or the DB),
                     // and later sections with this version are not out of date, so apply its time now
                     _.program.set(id, {

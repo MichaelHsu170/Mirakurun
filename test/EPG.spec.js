@@ -119,3 +119,72 @@ describe("[EPG.spec] EPG.write()", () => {
     });
   });
 });
+
+describe("[EPG.spec] EPG.write() with the real Program", () => {
+  const Program = require("../lib/Mirakurun/Program").default;
+  const Event = require("../lib/Mirakurun/Event").default;
+  const section = (tableId, sectionNumber, version, events) => ({ ...eit(version, events), table_id: tableId, section_number: sectionNumber });
+  const at = time => new Date(`2023-02-25T${time}:00+09:00`).getTime();
+  const X = 327360102400001, Y = 327360102400002;
+  let program, emitted;
+  beforeEach(t => {
+    // the real add/set/remove and conflict removal; save() only schedules the emit and the DB write
+    program = Object.create(Program.prototype);
+    program._itemMap = new Map();
+    program._itemMapDeleted = new Map();
+    program._emitPrograms = new Map();
+    program.save = () => {};
+    _.program = program;
+    emitted = [];
+    t.mock.method(Event, "emit", (resource, type, data) => emitted.push(`${type} ${data.id}`));
+  });
+  const times = id => {
+    const { startAt, duration, _isPresent, _isFollowing } = program.get(id);
+    return { startAt, duration, _isPresent, _isFollowing };
+  };
+
+  it("keeps the p/f times of the present and following programs when a new stream first sees them in a stale schedule section", () => {
+    // the 1st stream: EIT p/f extends X to 21:30, Y follows at 21:30; the schedule still has the old times
+    let epg = new EPG();
+    epg.write(section(0x50, 0, 5, [event(1, startTime(18, 0), duration(3, 0)), event(2, startTime(21, 0), duration(1, 0))]));
+    epg.write(section(0x4E, 0, 9, [event(1, startTime(18, 0), duration(3, 30))]));
+    epg.write(section(0x4E, 1, 9, [event(2, startTime(21, 30), duration(1, 0))]));
+    epg.end();
+    emitted = [];
+
+    // the 2nd stream: the schedule section arrives before p/f
+    epg = new EPG();
+    epg.write(section(0x50, 0, 5, [event(1, startTime(18, 0), duration(3, 0)), event(2, startTime(21, 0), duration(1, 0))]));
+    assert.deepStrictEqual(times(X), { startAt: at("18:00"), duration: 210 * 60 * 1000, _isPresent: true, _isFollowing: undefined });
+    assert.deepStrictEqual(times(Y), { startAt: at("21:30"), duration: 60 * 60 * 1000, _isPresent: undefined, _isFollowing: true });
+
+    epg.write(section(0x4E, 0, 9, [event(1, startTime(18, 0), duration(3, 30))]));
+    epg.write(section(0x4E, 1, 9, [event(2, startTime(21, 30), duration(1, 0))]));
+    assert.deepStrictEqual(emitted, []);
+    assert.strictEqual(program.exists(Y), true);
+  });
+
+  it("applies a p/f time to a present program at a new stream's first sighting", () => {
+    let epg = new EPG();
+    epg.write(section(0x4E, 0, 9, [event(1, startTime(18, 0), duration(3, 30))]));
+    epg.end();
+
+    // the next stream: the game runs on further, to 22:00
+    epg = new EPG();
+    epg.write(section(0x4E, 0, 10, [event(1, startTime(18, 0), duration(4, 0))]));
+
+    assert.deepStrictEqual(times(X), { startAt: at("18:00"), duration: 240 * 60 * 1000, _isPresent: true, _isFollowing: undefined });
+  });
+
+  it("applies a schedule time change to a program that p/f has not shown", () => {
+    let epg = new EPG();
+    epg.write(section(0x50, 0, 5, [event(2, startTime(21, 0), duration(1, 0))]));
+    epg.end();
+
+    // the next gathering: the broadcaster moved Y to 21:30
+    epg = new EPG();
+    epg.write(section(0x50, 0, 6, [event(2, startTime(21, 30), duration(1, 0))]));
+
+    assert.deepStrictEqual(times(Y), { startAt: at("21:30"), duration: 60 * 60 * 1000, _isPresent: undefined, _isFollowing: undefined });
+  });
+});
