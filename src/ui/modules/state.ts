@@ -18,6 +18,7 @@ import { DateTime } from "luxon";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Client as RPCClient } from "jsonrpc2-ws";
 import { setSchedule } from "./at";
+import { fetchJSON } from "./common";
 import * as ui from "./ui";
 import { Event, Service, Program, TunerDevice, Status, JobItem, JobScheduleItem, ConfigServer } from "../../../api.d";
 import { JoinParams, NotifyParams } from "../../../lib/Mirakurun/rpc.d";
@@ -210,7 +211,7 @@ class State extends EventEmitter<StateEventTypes> {
     }
 
     async fetchServerConfig(): Promise<ConfigServer> {
-        this.serverConfig = await (await fetch("/api/config/server")).json();
+        this.serverConfig = await fetchJSON("/api/config/server");
         return this.serverConfig;
     }
 

@@ -253,6 +253,22 @@ describe("[ui.spec] state.ts", () => {
     assert.deepStrictEqual(state.programs.map(p => p.id), [3, 2]);
   });
 
+  it("fetchServerConfig() keeps an error response out of the server config, so that the next call fetches again", async t => {
+    t.mock.method(globalThis, "fetch", async () => new Response('{"code":500,"reason":"bad indentation"}', { status: 500 }));
+    state.serverConfig = undefined;
+
+    await assert.rejects(state.fetchServerConfig(), { message: '500 {"code":500,"reason":"bad indentation"}' });
+    assert.strictEqual(state.serverConfig, undefined);
+    assert.strictEqual(globalThis.fetch.mock.calls[0].arguments[0], "/api/config/server");
+  });
+
+  it("fetchServerConfig() stores and returns the server config", async t => {
+    t.mock.method(globalThis, "fetch", async () => new Response('{"allowPNA":true}', { status: 200 }));
+
+    assert.deepStrictEqual(await state.fetchServerConfig(), { allowPNA: true });
+    assert.deepStrictEqual(state.serverConfig, { allowPNA: true });
+  });
+
   it("adds a tuner that it does not know yet", async () => {
     state.tuners.splice(0);
 
