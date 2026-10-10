@@ -116,6 +116,25 @@ describe("[ui.spec] common.ts: isHttpURL()", () => {
   });
 });
 
+describe("[ui.spec] common.ts: fetchJSON()", () => {
+  const response = (status, body) => new Response(body, { status, headers: { "Content-Type": "application/json" } });
+
+  it("returns the parsed body of a successful response", async t => {
+    t.mock.method(globalThis, "fetch", async () => response(200, '[{"name":"adapter0"}]'));
+
+    assert.deepStrictEqual(await common.fetchJSON("/api/config/tuners"), [{ name: "adapter0" }]);
+    assert.strictEqual(globalThis.fetch.mock.calls[0].arguments[0], "/api/config/tuners");
+  });
+
+  it("throws on an error response instead of returning the error body as the data", async t => {
+    t.mock.method(globalThis, "fetch", async () => response(500, '{"code":500,"reason":"bad indentation","errors":[]}'));
+
+    await assert.rejects(common.fetchJSON("/api/config/server"), {
+      message: '500 {"code":500,"reason":"bad indentation","errors":[]}'
+    });
+  });
+});
+
 describe("[ui.spec] common.ts: LazyCaller", () => {
   it("runs a call made while running again later, passing setTimeout a function", async t => {
     t.mock.timers.enable({ apis: ["setTimeout"] });

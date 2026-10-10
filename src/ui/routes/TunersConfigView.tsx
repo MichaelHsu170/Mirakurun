@@ -32,6 +32,7 @@ import {
     HTMLTable
 } from "@blueprintjs/core";
 import equal from "fast-deep-equal";
+import { fetchJSON } from "../modules/common";
 import { state } from "../modules/state";
 import * as ui from "../modules/ui";
 import { ConfigTuners, ConfigTunersItem, ChannelType } from "../../../api.d";
@@ -67,13 +68,15 @@ export const TunersConfigView: React.FC = () => {
 
         (async () => {
             try {
-                const res = await (await fetch(configAPI)).json();
+                const res = await fetchJSON(configAPI);
                 console.log("TunersConfigView", "GET", configAPI, "->", res);
                 setEditing(JSON.parse(JSON.stringify(res)));
                 setCurrent(JSON.parse(JSON.stringify(res)));
                 setIsLoading(false);
             } catch (e) {
+                // エラーの応答を設定として読み込まない (保存もできない)
                 console.error(e);
+                window.alert(`読み込みに失敗しました: ${e}`);
                 setIsLoading(false);
             }
         })();

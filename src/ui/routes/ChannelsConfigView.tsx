@@ -34,6 +34,7 @@ import {
     Switch
 } from "@blueprintjs/core";
 import equal from "fast-deep-equal";
+import { fetchJSON } from "../modules/common";
 import { state } from "../modules/state";
 import * as ui from "../modules/ui";
 import { ConfigChannels, ConfigChannelsItem, ChannelType, ChannelScanStatus } from "../../../api.d";
@@ -232,14 +233,16 @@ export const ChannelsConfigView: React.FC = () => {
 
         (async () => {
             try {
-                const res = await (await fetch(configAPI)).json();
+                const res = await fetchJSON(configAPI);
                 console.log("ChannelsConfigView", "GET", configAPI, "->", res);
                 const migrated = migrateChannels(res);
                 setEditing(JSON.parse(JSON.stringify(migrated)));
                 setCurrent(JSON.parse(JSON.stringify(migrated)));
                 setIsLoading(false);
             } catch (e) {
+                // エラーの応答を設定として読み込まない (保存もできない)
                 console.error(e);
+                window.alert(`読み込みに失敗しました: ${e}`);
                 setIsLoading(false);
             }
         })();

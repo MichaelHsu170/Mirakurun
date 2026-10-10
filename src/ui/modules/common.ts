@@ -38,6 +38,15 @@ export function isHttpURL(url: string): boolean {
     }
 }
 
+/** GET `url` as JSON; an error response throws instead of returning its error body as the data */
+export async function fetchJSON(url: string): Promise<any> {
+    const res = await fetch(url);
+    if (!res.ok) {
+        throw new Error(`${res.status} ${await res.text()}`);
+    }
+    return res.json();
+}
+
 export function getIdWithHex(id: number): string {
     return `0x${id.toString(16).toUpperCase()} (${id})`;
 }
