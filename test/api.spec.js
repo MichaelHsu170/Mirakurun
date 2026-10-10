@@ -3,6 +3,7 @@ const assert = require("assert");
 const sift = require("sift").default;
 
 const api = require("../lib/Mirakurun/api");
+const request = require("./apiRequest");
 
 describe("[api.spec] api.ts: stripQueryOperators()", () => {
   it("removes sift operators at any depth, so $where cannot run code", () => {
@@ -74,5 +75,36 @@ describe("[api.spec] channel and service lists ignore query operators", () => {
     const { get } = require("../lib/Mirakurun/api/services");
 
     assert.strictEqual((await call(get, { query: { $where: "false" } })).length, 1);
+  });
+});
+
+describe("[api.spec] PUT /api/job-schedules/{key}/run", () => {
+  const _ = require("../lib/Mirakurun/_").default;
+  const requested = [];
+  // Job#runSchedule() queues the schedule's job and returns true, or returns false for an unknown key
+  const job = { schedules: [{ key: "EPG.Gatherer" }], runSchedule: key => (requested.push(key), key === "EPG.Gatherer") };
+  const { put } = require("../lib/Mirakurun/api/job-schedules/{key}/run");
+
+  it("answers 404 for an unknown key, as documented", async () => {
+    _.job = job;
+    requested.length = 0;
+
+    const { status, body } = await request(put, { params: { key: "unknown" } });
+
+    assert.strictEqual(status, 404);
+    assert.strictEqual(body.code, 404);
+    assert.deepStrictEqual(requested, ["unknown"]);
+  });
+
+  it("answers 202 after requesting a known schedule", async () => {
+    _.job = job;
+    requested.length = 0;
+    let status;
+    const res = { status(code) { status = code; return this; }, end() {} };
+
+    await put({ params: { key: "EPG.Gatherer" } }, res);
+
+    assert.strictEqual(status, 202);
+    assert.deepStrictEqual(requested, ["EPG.Gatherer"]);
   });
 });

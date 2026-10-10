@@ -29,13 +29,12 @@ export const parameters = [
 export const put: Operation = (req, res) => {
     const key = req.params.key as string;
 
-    if (_.job.schedules.find(s => s.key === key) === null) {
-        api.responseError(res, 404);
-        return;
-    }
-
     try {
-        _.job.runSchedule(key);
+        // runSchedule() returns false for an unknown key
+        if (!_.job.runSchedule(key)) {
+            api.responseError(res, 404);
+            return;
+        }
 
         res.status(202);
         res.end();
