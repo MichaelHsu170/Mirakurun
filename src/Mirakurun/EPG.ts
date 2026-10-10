@@ -134,6 +134,8 @@ interface EventState {
 // forked from rndomhack/node-aribts/blob/1e7ef94bba3d6ac26aec764bf24dde2c2852bfcb/lib/epg.js
 export default class EPG {
     private _epg: { [networkId: number]: { [serviceId: number]: { [eventId: number]: EventState } } } = {};
+    // `${networkId}/${serviceId}/${section_number}` of the p/f sections this stream has received
+    private _pfSeen = new Set<string>();
 
     write(eit: EIT) {
         if (!this._epg) {
@@ -151,6 +153,20 @@ export default class EPG {
 
         const networkId = eit.original_network_id;
 
+        // a stored program's present/following flag may be left from an earlier stream; until this stream's p/f
+        // of the service has arrived, a schedule section waits rather than overwrite a flagged program's p/f time
+        const pfKey = `${networkId}/${eit.service_id}/`;
+        if (isPF) {
+            this._pfSeen.add(pfKey + eit.section_number);
+        }
+        const waits = (id: number) => {
+            const item = _.program.get(id);
+            return !isPF && !!item && (
+                (item._isPresent && !this._pfSeen.has(pfKey + 0)) ||
+                (item._isFollowing && !this._pfSeen.has(pfKey + 1))
+            );
+        };
+
         if (!this._epg[networkId]) {
             this._epg[networkId] = {};
         }
@@ -166,6 +182,7 @@ export default class EPG {
 
             if (!service[e.event_id]) {
                 const id = getProgramItemId(networkId, eit.service_id, e.event_id);
+                const waiting = waits(id);
                 if (!_.program.exists(id)) {
                     if (UNKNOWN_START_TIME.compare(e.start_time) === 0) {
                         continue;
@@ -183,11 +200,7 @@ export default class EPG {
                         _isFollowing: isF || undefined
                     };
                     _.program.add(programItem);
-                } else if (
-                    UNKNOWN_START_TIME.compare(e.start_time) !== 0 &&
-                    // a schedule section is older than the p/f time of a present or following program
-                    (isPF || !(_.program.get(id)._isPresent || _.program.get(id)._isFollowing))
-                ) {
+                } else if (UNKNOWN_START_TIME.compare(e.start_time) !== 0 && !waiting) {
                     // the program may have been moved since it was stored (by an earlier gathering or the DB),
                     // and later sections with this version are not out of date, so apply its time now
                     _.program.set(id, {
@@ -231,12 +244,15 @@ export default class EPG {
                     following: isF || undefined
                 };
 
-                state.version[eit.table_id] = eit.version_number;
+                if (!waiting) {
+                    // a section that waited is applied when it repeats, as it is not marked as seen
+                    state.version[eit.table_id] = eit.version_number;
+                }
                 service[e.event_id] = state;
             } else {
                 state = service[e.event_id];
 
-                if ((!state.present && isP) || (!state.following && isF) || isOutOfDate(eit, state.version)) {
+                if (((!state.present && isP) || (!state.following && isF) || isOutOfDate(eit, state.version)) && !waits(state.programId)) {
                     state.version[eit.table_id] = eit.version_number;
 
                     if (UNKNOWN_START_TIME.compare(e.start_time) !== 0) {

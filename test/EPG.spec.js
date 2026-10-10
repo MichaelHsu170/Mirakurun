@@ -187,4 +187,93 @@ describe("[EPG.spec] EPG.write() with the real Program", () => {
 
     assert.deepStrictEqual(times(Y), { startAt: at("21:30"), duration: 60 * 60 * 1000, _isPresent: undefined, _isFollowing: undefined });
   });
+
+  it("keeps the p/f times while a stale schedule section repeats before the new stream's p/f of the service", () => {
+    let epg = new EPG();
+    epg.write(section(0x50, 0, 5, [event(1, startTime(18, 0), duration(3, 0)), event(2, startTime(21, 0), duration(1, 0))]));
+    epg.write(section(0x4E, 0, 9, [event(1, startTime(18, 0), duration(3, 30))]));
+    epg.write(section(0x4E, 1, 9, [event(2, startTime(21, 30), duration(1, 0))]));
+    epg.end();
+
+    // the 2nd stream: the p/f of another service arrives, then the stale schedule section twice
+    epg = new EPG();
+    epg.write({ ...section(0x4E, 0, 3, []), service_id: 1025 });
+    epg.write({ ...section(0x4E, 1, 3, []), service_id: 1025 });
+    const stale = section(0x50, 0, 5, [event(1, startTime(18, 0), duration(3, 0)), event(2, startTime(21, 0), duration(1, 0))]);
+    epg.write(stale);
+    epg.write(stale);
+    assert.deepStrictEqual(times(X), { startAt: at("18:00"), duration: 210 * 60 * 1000, _isPresent: true, _isFollowing: undefined });
+    assert.deepStrictEqual(times(Y), { startAt: at("21:30"), duration: 60 * 60 * 1000, _isPresent: undefined, _isFollowing: true });
+
+    // p/f present has arrived, p/f following not yet
+    epg.write(section(0x4E, 0, 9, [event(1, startTime(18, 0), duration(3, 30))]));
+    epg.write(stale);
+    assert.deepStrictEqual(times(Y), { startAt: at("21:30"), duration: 60 * 60 * 1000, _isPresent: undefined, _isFollowing: true });
+  });
+
+  it("applies a p/f present time at once to a program that was following in the last stream", () => {
+    let epg = new EPG();
+    epg.write(section(0x4E, 1, 9, [event(2, startTime(21, 0), duration(1, 0))]));
+    epg.end();
+
+    // the next stream: Y is on air and runs to 22:30; p/f present arrives before p/f following
+    epg = new EPG();
+    epg.write(section(0x4E, 0, 10, [event(2, startTime(21, 0), duration(1, 30))]));
+
+    assert.deepStrictEqual(times(Y), { startAt: at("21:00"), duration: 90 * 60 * 1000, _isPresent: true, _isFollowing: undefined });
+  });
+
+  it("applies the schedule time to a program that has left the following slot once the new stream's p/f has arrived", () => {
+    const V = 327360102400003, Z = 327360102400004;
+    // the 1st stream at 20:50: X 20:00-21:00 is present, Y 21:00-22:00 follows, then V 22:00-23:00
+    let epg = new EPG();
+    epg.write(section(0x50, 0, 1, [event(1, startTime(20, 0), duration(1, 0)), event(2, startTime(21, 0), duration(1, 0)), event(3, startTime(22, 0), duration(1, 0))]));
+    epg.write(section(0x4E, 0, 1, [event(1, startTime(20, 0), duration(1, 0))]));
+    epg.write(section(0x4E, 1, 1, [event(2, startTime(21, 0), duration(1, 0))]));
+    epg.end();
+
+    // at 20:55 the broadcaster inserts Z at 21:00 and moves Y to 23:00; the 2nd stream at 21:20 gets the schedule first
+    epg = new EPG();
+    const schedule = section(0x50, 0, 2, [
+      event(1, startTime(20, 0), duration(1, 0)), event(4, startTime(21, 0), duration(1, 0)),
+      event(3, startTime(22, 0), duration(1, 0)), event(2, startTime(23, 0), duration(1, 0))
+    ]);
+    epg.write(schedule);
+    // Y's following flag may still be current until this stream's p/f arrives
+    assert.deepStrictEqual(times(Y), { startAt: at("21:00"), duration: 60 * 60 * 1000, _isPresent: undefined, _isFollowing: true });
+
+    epg.write(section(0x4E, 0, 2, [event(4, startTime(21, 0), duration(1, 0))]));
+    epg.write(section(0x4E, 1, 2, [event(3, startTime(22, 0), duration(1, 0))]));
+    epg.write(schedule);
+
+    assert.deepStrictEqual(times(Y), { startAt: at("23:00"), duration: 60 * 60 * 1000, _isPresent: undefined, _isFollowing: undefined });
+    assert.deepStrictEqual(times(X), { startAt: at("20:00"), duration: 60 * 60 * 1000, _isPresent: undefined, _isFollowing: undefined });
+    assert.deepStrictEqual(times(Z), { startAt: at("21:00"), duration: 60 * 60 * 1000, _isPresent: true, _isFollowing: undefined });
+    assert.deepStrictEqual(times(V), { startAt: at("22:00"), duration: 60 * 60 * 1000, _isPresent: undefined, _isFollowing: true });
+  });
+
+  it("applies the schedule time to a following program that the broadcaster swapped with the next one once p/f following has arrived", () => {
+    const V = 327360102400003;
+    // the 1st stream at 20:50: X 20:00-21:00 is present, Y 21:00-22:00 follows, then V 22:00-23:00
+    let epg = new EPG();
+    epg.write(section(0x50, 0, 1, [event(1, startTime(20, 0), duration(1, 0)), event(2, startTime(21, 0), duration(1, 0)), event(3, startTime(22, 0), duration(1, 0))]));
+    epg.write(section(0x4E, 0, 1, [event(1, startTime(20, 0), duration(1, 0))]));
+    epg.write(section(0x4E, 1, 1, [event(2, startTime(21, 0), duration(1, 0))]));
+    epg.end();
+    emitted = [];
+
+    // at 20:55 the broadcaster swaps Y and V; the 2nd stream at 20:58 gets the schedule, p/f following, the schedule again
+    epg = new EPG();
+    const schedule = section(0x50, 0, 2, [event(1, startTime(20, 0), duration(1, 0)), event(3, startTime(21, 0), duration(1, 0)), event(2, startTime(22, 0), duration(1, 0))]);
+    epg.write(schedule);
+    assert.deepStrictEqual(times(Y), { startAt: at("21:00"), duration: 60 * 60 * 1000, _isPresent: undefined, _isFollowing: true });
+    epg.write(section(0x4E, 1, 2, [event(3, startTime(21, 0), duration(1, 0))]));
+    epg.write(schedule);
+
+    // X's present flag is still current until p/f present arrives
+    assert.deepStrictEqual(times(X), { startAt: at("20:00"), duration: 60 * 60 * 1000, _isPresent: true, _isFollowing: undefined });
+    assert.deepStrictEqual(times(V), { startAt: at("21:00"), duration: 60 * 60 * 1000, _isPresent: undefined, _isFollowing: true });
+    assert.deepStrictEqual(times(Y), { startAt: at("22:00"), duration: 60 * 60 * 1000, _isPresent: undefined, _isFollowing: undefined });
+    assert.deepStrictEqual(emitted, []);
+  });
 });
