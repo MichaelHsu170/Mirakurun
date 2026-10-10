@@ -20,8 +20,9 @@ export MALLOC_ARENA_MAX=2
 
 # trap
 function trap_exit() {
-  # ignore restart requests (SIGHUP) while shutting down: restart() would start a new node
-  trap '' 1
+  # ignore restart requests (SIGHUP) while shutting down: restart() would start a new node;
+  # ignore further stop signals too: "exit 0" would end init (PID 1) during the wait and kill node mid-save
+  trap '' 1 2 3 15
   echo "stopping... $(jobs -p)"
   kill $(jobs -p) > /dev/null 2>&1 || echo "already killed."
   # wait for node to save its pending changes (docker stop SIGKILLs it after the stop timeout);
