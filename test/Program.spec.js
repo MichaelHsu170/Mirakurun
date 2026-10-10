@@ -5,6 +5,7 @@ const _ = require("../lib/Mirakurun/_").default;
 _.config.server = {};
 const db = require("../lib/Mirakurun/db");
 const Program = require("../lib/Mirakurun/Program").default;
+const Event = require("../lib/Mirakurun/Event").default;
 
 describe("[Program.spec] Program.save()", () => {
   it("saves within 5 minutes even while changes keep arriving", t => {
@@ -101,5 +102,52 @@ describe("[Program.spec] Program.flush()", () => {
 
     await program.flush();
     assert.strictEqual(saves.length, 1);
+  });
+});
+
+describe("[Program.spec] Program.remove()", () => {
+  const hour = 60 * 60 * 1000;
+  const setup = t => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 0 });
+    const originalSave = db.savePrograms;
+    db.savePrograms = async () => {};
+    t.after(() => { db.savePrograms = originalSave; });
+    const originalJob = _.job;
+    _.job = { add() {}, addSchedule() {} };
+    t.after(() => { _.job = originalJob; });
+    const events = [];
+    t.mock.method(Event, "emit", (resource, type, data) => { events.push(`${type} ${data.id}`); return true; });
+    return { program: new Program(), events };
+  };
+  // runs the 1 s debounce of the queued events and the 10 ms pause after each one
+  const emitQueued = async t => {
+    t.mock.timers.tick(1000);
+    for (let i = 0; i < 10; i++) {
+      await new Promise(setImmediate);
+      t.mock.timers.tick(10);
+    }
+  };
+
+  it("does not emit a queued update of a program after it was removed as a conflict", async t => {
+    const { program, events } = setup(t);
+    program.add({ id: 1, networkId: 4, serviceId: 101, eventId: 1, startAt: hour, duration: hour }, true);
+    program.set(1, { duration: hour / 2 }); // queues "update 1"
+    // before the queued events are sent, a new event overlapping it arrives
+    program.add({ id: 2, networkId: 4, serviceId: 101, eventId: 2, startAt: hour + hour / 4, duration: hour });
+
+    await emitQueued(t);
+    assert.deepStrictEqual(events, ["remove 1", "create 2"]);
+    assert.strictEqual(program.isLogicallyDeleted(1), true);
+  });
+
+  it("does not emit a queued update of a program removed by a replace", async t => {
+    const { program, events } = setup(t);
+    program.add({ id: 1, networkId: 4, serviceId: 101, eventId: 1, startAt: hour, duration: hour }, true);
+    program.set(1, { duration: hour / 2 }); // queues "update 1"
+    program.findByNetworkIdAndReplace(4, []);
+
+    await emitQueued(t);
+    assert.deepStrictEqual(events, []);
+    assert.strictEqual(program.exists(1), false);
   });
 });

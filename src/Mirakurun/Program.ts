@@ -115,6 +115,8 @@ export class Program {
     }
 
     remove(id: number, logicallyDelete: boolean = false): void {
+        // a queued create/update of the removed program must not be emitted after its removal
+        this._emitPrograms.delete(this.get(id));
         if (logicallyDelete) {
             const item = this.get(id);
             if (item) {
