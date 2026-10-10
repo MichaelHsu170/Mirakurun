@@ -83,7 +83,17 @@ export const get: Operation = (req, res) => {
             res.setHeader("X-Mirakurun-Tuner-User-ID", userId);
             res.status(200);
 
-            req.setTimeout(1000 * 60 * 10); // 10 minites
+            // cut the stream after 10 minutes without data, but not while TSFilter waits for a delayed program
+            // to start (nothing is written until then): TSFilter ends that wait itself, by the program's end
+            // (+3 minutes if its duration is undetermined). The program's end + 5 minutes is a backstop.
+            const timeout = 1000 * 60 * 10;
+            res.setTimeout(timeout, () => {
+                if (res.headersSent === false && Date.now() < program.startAt + program.duration + 1000 * 60 * 5) {
+                    res.setTimeout(timeout);
+                    return;
+                }
+                res.destroy();
+            });
         })
         .catch((err) => api.responseStreamErrorHandler(res, err));
 };
