@@ -864,7 +864,7 @@ export default class TSFilter extends EventEmitter {
                 }
 
                 // check logoDataInterval
-                if (now - await Service.getLogoDataMTime(this._targetNetworkId, logoId) > logoDataInterval) {
+                if (now - await Service.getLogoDataMTime(Number(networkId), logoId) > logoDataInterval) {
                     if (this._closed) {
                         return; // break all loops
                     }

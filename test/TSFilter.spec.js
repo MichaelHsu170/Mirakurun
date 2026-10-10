@@ -1,6 +1,14 @@
-const { describe, it } = require("node:test");
+const { describe, it, after } = require("node:test");
 const assert = require("assert");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 const { PassThrough } = require("stream");
+
+// read by Service when it is loaded
+const logoDir = fs.mkdtempSync(path.join(os.tmpdir(), "mirakurun-logo-"));
+process.env.LOGO_DATA_DIR_PATH = logoDir;
+after(() => fs.rmSync(logoDir, { recursive: true, force: true }));
 
 const _ = require("../lib/Mirakurun/_").default;
 _.config.server = {};
@@ -51,5 +59,39 @@ describe("[TSFilter.spec] TSFilter", () => {
 
     assert.strictEqual(filter._dlDataMap.has(8), false);
     filter.close();
+  });
+
+  describe("logo freshness check of a BS service stream, which also covers the CS networks 6 and 7", () => {
+    // whether the stream starts listening to the logo carousel, with these logo files written just now
+    const waitsForLogos = async (services, files) => {
+      for (const file of fs.readdirSync(logoDir)) {
+        fs.rmSync(path.join(logoDir, file));
+      }
+      for (const file of files) {
+        fs.writeFileSync(path.join(logoDir, file), "png");
+      }
+      _.service.findByNetworkId = networkId => services.filter(service => service.networkId === networkId);
+      const filter = new TSFilter({ output: new PassThrough(), networkId: 4, serviceId: 101 });
+      filter._essMap.set(929, 0x1FC8); // the TS carries an ESS
+
+      await filter._standbyLogoData();
+      const waiting = filter._parser.listenerCount("dsmcc") !== 0;
+
+      filter.close();
+      _.service.findByNetworkId = () => [];
+      return waiting;
+    };
+
+    it("finds a CS logo fresh under its own network id", async () => {
+      const services = [{ networkId: 4, logoId: 5 }, { networkId: 7, logoId: 25 }];
+
+      assert.strictEqual(await waitsForLogos(services, ["4_5.png", "7_25.png"]), false);
+    });
+
+    it("does not take a BS logo with the same logo id for a CS one", async () => {
+      const services = [{ networkId: 4, logoId: 5 }, { networkId: 7, logoId: 5 }];
+
+      assert.strictEqual(await waitsForLogos(services, ["4_5.png"]), true);
+    });
   });
 });
