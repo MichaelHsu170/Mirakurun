@@ -223,7 +223,9 @@ export class Program {
                 dropped = true;
                 return;
             }
-            if (now > (item.startAt + item.duration)) {
+            // a program in an undetermined overrun is stored with a 1 ms duration: keep it (as _gc() does) so that its
+            // recording can resume after a restart
+            if (item.duration !== 1 && now > (item.startAt + item.duration)) {
                 dropped = true;
                 return;
             }

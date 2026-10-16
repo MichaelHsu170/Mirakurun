@@ -151,3 +151,40 @@ describe("[Program.spec] Program.remove()", () => {
     assert.strictEqual(program.exists(1), false);
   });
 });
+
+describe("[Program.spec] Program.load()", () => {
+  const hour = 60 * 60 * 1000;
+  const load = async (t, stored) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10 * hour });
+    const originalLoad = db.loadPrograms;
+    const originalSave = db.savePrograms;
+    db.loadPrograms = async () => stored;
+    db.savePrograms = async () => {};
+    t.after(() => { db.loadPrograms = originalLoad; db.savePrograms = originalSave; });
+    const originalJob = _.job;
+    const originalIntegrity = _.configIntegrity;
+    _.job = { add() {}, addSchedule() {} };
+    _.configIntegrity = { channels: "" };
+    t.after(() => { _.job = originalJob; _.configIntegrity = originalIntegrity; });
+    t.mock.method(Event, "emit", () => true);
+    const program = new Program();
+    await program.load();
+    return program;
+  };
+
+  it("keeps a stored program in an undetermined overrun (1 ms duration) that started before the restart", async t => {
+    const program = await load(t, [
+      { id: 1, networkId: 4, serviceId: 101, eventId: 1, startAt: 8 * hour, duration: 1 }
+    ]);
+    assert.strictEqual(program.exists(1), true);
+  });
+
+  it("drops a stored program that has ended and keeps one that has not", async t => {
+    const program = await load(t, [
+      { id: 1, networkId: 4, serviceId: 101, eventId: 1, startAt: 8 * hour, duration: hour },
+      { id: 2, networkId: 4, serviceId: 101, eventId: 2, startAt: 10 * hour, duration: hour }
+    ]);
+    assert.strictEqual(program.exists(1), false);
+    assert.strictEqual(program.exists(2), true);
+  });
+});
