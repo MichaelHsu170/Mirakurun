@@ -537,6 +537,10 @@ export default class TSFilter extends EventEmitter {
             log.info("TSFilter#_onPMT: now ready for serviceId=%d", this._provideServiceId);
         }
 
+        // provide only what the current PMT lists: a PID that leaves the service (a sub-channel moving
+        // from its main channel's simulcast PIDs to its own) stops here instead of passing to the end
+        this._providePids = new Set([...PROVIDE_PIDS, this._pmtPid]);
+
         if (data.program_info[0]) {
             this._providePids.add(data.program_info[0].CA_PID);
         }

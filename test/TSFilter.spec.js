@@ -61,6 +61,68 @@ describe("[TSFilter.spec] TSFilter", () => {
     filter.close();
   });
 
+  describe("service stream of a sub-channel whose PMT changes", () => {
+    // BS sub-channel 142 (PMT PID 0x1F2): first the main channel 141's simulcast PIDs, then its own
+    const packet = pid => {
+      const p = Buffer.alloc(188, 0);
+      p[0] = 0x47;
+      p.writeUInt16BE(pid, 1);
+      p[3] = 0x10;
+      return p;
+    };
+    const pmt = (version, pcr, pids) => ({
+      program_number: 142,
+      version_number: version,
+      PCR_PID: pcr,
+      program_info: [],
+      streams: pids.map(pid => ({ stream_type: 0x02, elementary_PID: pid, ES_info: [] }))
+    });
+    // PIDs of the packets the stream passes on, of those written after the PMT was taken
+    const providedAfter = (filter, output, pids) => {
+      const got = new Set();
+      const onData = chunk => {
+        for (let i = 0; i < chunk.length; i += 188) {
+          got.add(chunk.readUInt16BE(i + 1) & 0x1FFF);
+        }
+      };
+      output.on("data", onData);
+      filter.write(Buffer.concat(pids.map(packet)));
+      output.off("data", onData);
+      return [...got].sort((a, b) => a - b);
+    };
+    const start = () => {
+      const output = new PassThrough();
+      const filter = new TSFilter({ output, networkId: 4, serviceId: 142 });
+      filter._onPAT(0, {
+        transport_stream_id: 0x40F1,
+        programs: [{ program_number: 142, program_map_PID: 0x1F2 }],
+        _raw: Buffer.alloc(8)
+      });
+      filter._onPMT(0x1F2, pmt(0, 0x1FF, [0x140, 0x141]));
+      return { output, filter };
+    };
+    const written = [0x0000, 0x0012, 0x1F2, 0x1FF, 0x140, 0x141, 0x240, 0x241];
+
+    it("passes only the PIDs of the current PMT, so the main channel's stop at the switch", () => {
+      const { output, filter } = start();
+      assert.deepStrictEqual(providedAfter(filter, output, written), [0x0000, 0x0012, 0x140, 0x141, 0x1F2, 0x1FF]);
+
+      filter._onPMT(0x1F2, pmt(1, 0x2FF, [0x240, 0x241]));
+
+      assert.deepStrictEqual(providedAfter(filter, output, [...written, 0x2FF]), [0x0000, 0x0012, 0x1F2, 0x240, 0x241, 0x2FF]);
+      filter.close();
+    });
+
+    it("keeps passing the same PIDs when only the PMT version changes", () => {
+      const { output, filter } = start();
+
+      filter._onPMT(0x1F2, pmt(1, 0x1FF, [0x140, 0x141]));
+
+      assert.deepStrictEqual(providedAfter(filter, output, written), [0x0000, 0x0012, 0x140, 0x141, 0x1F2, 0x1FF]);
+      filter.close();
+    });
+  });
+
   describe("logo freshness check of a BS service stream, which also covers the CS networks 6 and 7", () => {
     // whether the stream starts listening to the logo carousel, with these logo files written just now
     const waitsForLogos = async (services, files) => {
