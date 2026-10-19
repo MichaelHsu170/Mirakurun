@@ -57,4 +57,18 @@ describe("[db.spec] fileUtil.ts: writeFileAtomic()", () => {
 
     assert.strictEqual(fs.readFileSync(file, "utf8"), "old");
   });
+
+  it("keeps the owner and mode of the file it replaces", async t => {
+    // the container runs as root, but the owner edits the config files on the host (channels.yml, tuners.yml)
+    const file = path.join(tmpDir(t), "tuners.yml");
+    fs.writeFileSync(file, "old");
+    fs.chownSync(file, 1000, 1000);
+    fs.chmodSync(file, 0o664);
+
+    await writeFileAtomic(file, "new");
+
+    const st = fs.statSync(file);
+    assert.deepStrictEqual([st.uid, st.gid, st.mode & 0o777], [1000, 1000, 0o664]);
+    assert.strictEqual(fs.readFileSync(file, "utf8"), "new");
+  });
 });
