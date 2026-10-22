@@ -1,5 +1,5 @@
 ARG ARCH=
-FROM ${ARCH}node:24.18.0-bookworm AS build
+FROM ${ARCH}node:24.22.1-bookworm AS build
 WORKDIR /app
 ENV DOCKER=YES NODE_ENV=production
 ADD . .
@@ -19,7 +19,7 @@ RUN cd && git clone https://github.com/stz2012/libarib25.git && cd libarib25 && 
 RUN cd && git clone https://github.com/stz2012/recpt1.git && cd recpt1 && git checkout 77c7bce2527e1df45cc8667ede753d09de7b3e6c && cd recpt1 && ./autogen.sh && ./configure --enable-b25 && make && make install && cd .. && rm -rf recpt1
 #RUN cd && cp -r /app/recdvb-1.3.3 . && cd recdvb-1.3.3 && ./autogen.sh && ./configure --enable-b25 && make && make install && cd .. && rm -rf recdvb-1.3.3
 
-FROM ${ARCH}node:24.18.0-bookworm-slim
+FROM ${ARCH}node:24.22.1-bookworm-slim
 WORKDIR /app
 RUN apt-get update && \
     apt-get upgrade -y && \
